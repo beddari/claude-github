@@ -34,9 +34,10 @@ Two workflows run on every pull request:
 | `labs` | `task acme-env:up` and `check`, then `task talos-cluster:up` with `verify`; only when the change needs it, see below | about 6 minutes |
 
 Merge when both are green. `labs` runs its job `e2e` when the change touches
-anything under `labs/` but the docs, its workflow, or `bin/labs-changed`,
-which decides it. A change to the labs' READMEs or `labs/docs/` skips `e2e`,
-and GitHub counts a skipped job as passed. To see what a branch would do:
+anything under `labs/` but the docs and pages, its workflow, or
+`bin/labs-changed`, which decides it. A change to the labs' READMEs, their
+`index.html` pages or `labs/docs/` skips `e2e`, and GitHub counts a
+skipped job as passed. To see what a branch would do:
 
 ```sh
 task labs-changed               # true or false, against origin/main

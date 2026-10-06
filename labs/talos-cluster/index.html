@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>talos-cluster</title>
+  <meta name="description" content="Talos Kubernetes in Docker that gets its DNS records, certificates, a wildcard and its own CA from acme-env." />
+  <link rel="stylesheet" href="../../assets/wire.css" />
+</head>
+<body>
+  <main>
+    <a class="back" href="../../">← Back to the drawer</a>
+    <span class="wire" aria-hidden="true"></span>
+    <h1>talos-cluster</h1>
+    <p class="lede">
+      A small Talos Kubernetes cluster in Docker that plugs into
+      <a href="../acme-env/">acme-env</a>. Its Kubernetes CA is signed by
+      acme-env's root, external-dns publishes its Ingresses in the lab
+      zone, and cert-manager gets their certificates over ACME, a wildcard
+      included.
+    </p>
+
+    <h2>Why</h2>
+    <p>
+      To try an app the way it runs in a real cluster: a name that
+      resolves, HTTPS that verifies, and certificates that renew, all from
+      one Ingress. One command builds the cluster and ends with a test of
+      the whole chain, so a change to a chart, an image or acme-env shows
+      up as a failing step.
+    </p>
+
+    <h2>What you get</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>part</th><th>what it does</th></tr></thead>
+        <tbody>
+          <tr><td>Talos v1.14</td><td>Kubernetes 1.37: a control plane at 10.5.0.2 and a worker at 10.5.0.3, in Docker</td></tr>
+          <tr><td>cluster CA</td><td>"acme-lab Kubernetes CA", signed by acme-env's root; the API server's certificate chains to it</td></tr>
+          <tr><td>Traefik</td><td>The ingress controller, on the worker's ports 80 and 443</td></tr>
+          <tr><td>external-dns</td><td>Writes the names of Ingresses into acme-env's etcd</td></tr>
+          <tr><td>cert-manager</td><td>The issuer <code>step-ca</code>: HTTP-01 for names, DNS-01 for <code>*.lab.test</code></td></tr>
+          <tr><td>whoami, hello</td><td>Demos at <code>https://whoami.lab.test</code> and, on the wildcard, <code>https://hello.lab.test</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>What the test prints</h2>
+    <p>
+      <code>task talos-cluster:up</code> ends with <code>verify</code>. On a
+      GitHub runner the whole run took 3 minutes 32 seconds; a certificate
+      took 19 seconds over HTTP-01 and 61 over DNS-01. The output, shortened:
+    </p>
+<pre><span class="p">&gt;&gt;&gt;</span> The API server's certificate chains to the lab's root:
+subject=CN = acme-lab Kubernetes CA
+issuer=O = Lab Internal CA, CN = Lab Internal CA Root CA
+<span class="p">&gt;&gt;&gt;</span> A pod on acme-lab-controlplane-1 resolves ca.lab.test
+<span class="p">&gt;&gt;&gt;</span> A pod on acme-lab-worker-1 resolves ca.lab.test
+<span class="p">&gt;&gt;&gt;</span> whoami.lab.test -&gt; 10.5.0.3, published by external-dns
+X509v3 Subject Alternative Name: critical
+    DNS:whoami.lab.test
+<span class="p">&gt;&gt;&gt;</span> *.lab.test was issued over DNS-01
+Host: hello.lab.test
+X509v3 Subject Alternative Name: critical
+    DNS:*.lab.test
+issuer=O = Lab Internal CA, CN = Lab Internal CA Intermediate CA
+<span class="p">&gt;&gt;&gt; All good:</span> CA chain, whoami.lab.test over HTTP-01, *.lab.test over DNS-01.</pre>
+
+    <h2>Plug it in</h2>
+    <p>
+      You need Docker, talosctl, kubectl, helm, jq, curl and
+      <code>dig</code>, from the repository's Brewfile, and acme-env up.
+      The two nodes take 2 CPUs and 2 GiB each. On Linux, load
+      <code>br_netfilter</code> first.
+    </p>
+<pre>git clone https://github.com/beddari/claude-github &amp;&amp; cd claude-github
+brew bundle
+sudo modprobe br_netfilter
+task acme-env:up
+task talos-cluster:up       <span class="d"># about 3.5 minutes; ends with verify</span>
+export KUBECONFIG=$PWD/labs/talos-cluster/.run/kubeconfig</pre>
+
+    <h2>Use it</h2>
+    <p>
+      Any Ingress in the zone gets a record and a certificate: a host in
+      <code>lab.test</code>, the class <code>traefik</code>, a TLS secret and
+      the issuer.
+    </p>
+<pre>metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: step-ca
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [myapp.lab.test]
+      secretName: myapp-tls
+  rules:
+    - host: myapp.lab.test</pre>
+    <p class="note">
+      Not tested: macOS, arm64, more than one worker, rotating the cluster's
+      CA, and upgrades in a running cluster; <code>task talos-cluster:down</code>
+      and <code>up</code> is the tested way.
+    </p>
+
+    <p>
+      <a href="https://github.com/beddari/claude-github/tree/main/labs/talos-cluster">Source and README on GitHub →</a><br />
+      <a href="https://github.com/beddari/claude-github/blob/main/labs/docs/architecture.md">Architecture of both labs →</a>
+    </p>
+  </main>
+</body>
+</html>

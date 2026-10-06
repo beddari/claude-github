@@ -43,7 +43,7 @@ tasks:
       - go run ./infra/drawer docs
 
   wire-add:
-    desc: 'Add a project to the drawer: task wire-add -- NAME PATH app|tool|lab "what it does"'
+    desc: 'Add a project to the drawer: task wire-add -- NAME PATH app|tool|lab "what it does" [HREF]'
     cmds:
       - go run ./infra/drawer add {{.CLI_ARGS}}
 

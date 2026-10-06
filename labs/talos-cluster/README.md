@@ -194,6 +194,7 @@ needs the hidden `--disable-ipv6` in `TALOS_ARGS`.
 
 ```
 Taskfile.yml                 the tasks; each one calls a script in bin/
+index.html                   the wire's page in the drawer
 bin/                         one script per task, and functions.sh with the chart versions
 values/                      Helm values: traefik.yaml, external-dns.yaml, cert-manager.yaml
 manifests/*.yaml.tmpl        the ClusterIssuer, whoami and the wildcard; bin/render fills in the zone and the root

@@ -182,6 +182,7 @@ The CA's TLS certificate names `ca.lab.test`, `HOST_IP`, `localhost` and
 
 ```
 Taskfile.yml        the tasks; each one calls a script in bin/
+index.html          the wire's page in the drawer
 bin/                one script per task, and functions.sh with the image versions
 Corefile.tmpl       CoreDNS: the zone from etcd, ca.<zone> pinned, _acme-challenge.<zone> to BIND
 bind/               BIND's named.conf and its one zone, as templates

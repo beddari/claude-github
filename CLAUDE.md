@@ -29,6 +29,9 @@ The shape of https://git.dataverket.org/dataverket/incusdev-vm:
   `task lint` at the root pass before a push.
 - A new project goes into `wires.json` (`task wire-add` or `task new-go`)
   and into `includes:` at the end of the root `Taskfile.yml`.
+- Every wire has a page, the `href` in `wires.json`: in the shape of
+  `tools/skill-audit/index.html`, styled by `assets/wire.css`, with real
+  output. A change to a wire updates its page.
 - Repository plumbing is Go, in `infra/drawer`. No Python or Node.
 - Host tools come from the `Brewfile`.
 

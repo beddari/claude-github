@@ -66,6 +66,11 @@ func TestCheckAndAdd(t *testing.T) {
 	}
 	// …until it's added; adding twice is a no-op.
 	runOK(t, "-root", r, "add", "new-thing", "tools/new-thing", "tool", "Shiny.")
+	// …and has a page.
+	if code := run([]string{"-root", r, "check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "has no index.html") {
+		t.Errorf("check without a page: %d %s", code, errb.String())
+	}
+	os.WriteFile(filepath.Join(r, "tools/new-thing/index.html"), []byte("page"), 0o644)
 	if out := runOK(t, "-root", r, "add", "new-thing", "tools/new-thing", "tool"); !strings.Contains(out, "already listed") {
 		t.Errorf("second add: %s", out)
 	}
@@ -77,7 +82,10 @@ func TestCheckAndAdd(t *testing.T) {
 	if code := run([]string{"-root", r, "check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "labs/a-lab is not in the drawer") {
 		t.Errorf("check with unlisted lab: %d %s", code, errb.String())
 	}
-	runOK(t, "-root", r, "add", "a-lab", "labs/a-lab", "lab", "Lab.")
+	// An href names a page elsewhere in the project.
+	runOK(t, "-root", r, "add", "a-lab", "labs/a-lab", "lab", "Lab.", "labs/a-lab/plug/")
+	os.MkdirAll(filepath.Join(r, "labs/a-lab/plug"), 0o755)
+	os.WriteFile(filepath.Join(r, "labs/a-lab/plug/index.html"), []byte("page"), 0o644)
 	runOK(t, "-root", r, "check")
 
 	if code := run([]string{"-root", r, "add", "Bad Name", "x", "tool"}, &out, &errb); code != 1 {
@@ -94,6 +102,17 @@ func TestCheckBadHref(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := run([]string{"-root", r, "check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "no index.html") {
 		t.Errorf("missing page not caught: %d %s", code, errb.String())
+	}
+}
+
+func TestCheckNoHref(t *testing.T) {
+	r := repo(t)
+	os.WriteFile(filepath.Join(r, "wires.json"), []byte(`{"repo":"https://example.com/r","wires":[
+  {"name":"app-one","path":"apps/app-one","kind":"app","blurb":"An app.","href":"apps/app-one/"},
+  {"name":"tool-one","path":"tools/tool-one","kind":"tool","blurb":"A tool."}]}`), 0o644)
+	var out, errb bytes.Buffer
+	if code := run([]string{"-root", r, "check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "no href") {
+		t.Errorf("wire without a page not caught: %d %s", code, errb.String())
 	}
 }
 

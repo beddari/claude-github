@@ -102,7 +102,10 @@ func check(root string) (int, []string, error) {
 		if fi, err := os.Stat(filepath.Join(root, w.Path)); w.Path != "" && (err != nil || !fi.IsDir()) {
 			errs = append(errs, fmt.Sprintf("%s is listed but does not exist", w.Path))
 		}
-		if isLocal(w.Href) {
+		switch {
+		case w.Href == "":
+			errs = append(errs, fmt.Sprintf("entry %q: no href; every wire has a page", w.Name))
+		case isLocal(w.Href):
 			if _, err := os.Stat(filepath.Join(root, w.Href, "index.html")); err != nil {
 				errs = append(errs, fmt.Sprintf("entry %q: href %q has no index.html to publish", w.Name, w.Href))
 			}
@@ -114,13 +117,14 @@ func check(root string) (int, []string, error) {
 	}
 	for _, p := range ps {
 		if !listed[p] {
-			errs = append(errs, fmt.Sprintf("%s is not in the drawer (task wire:add NAME=… PATH=%s KIND=… BLURB=…)", p, p))
+			errs = append(errs, fmt.Sprintf("%s is not in the drawer (task wire-add -- NAME %s KIND BLURB)", p, p))
 		}
 	}
 	return len(ix.Wires), errs, nil
 }
 
-// add appends w unless its path is already listed.
+// add appends w unless its path is already listed. Its href defaults to its
+// path: the folder whose index.html is the wire's page.
 func add(root string, w Wire) (bool, error) {
 	if !nameRe.MatchString(w.Name) {
 		return false, fmt.Errorf("name %q must be lowercase letters, digits and hyphens", w.Name)
@@ -137,7 +141,7 @@ func add(root string, w Wire) (bool, error) {
 			return false, nil
 		}
 	}
-	if w.Kind == "app" && w.Href == "" {
+	if w.Href == "" {
 		w.Href = strings.TrimSuffix(w.Path, "/") + "/"
 	}
 	ix.Wires = append(ix.Wires, w)

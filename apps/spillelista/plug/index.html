@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>spillelista</title>
+  <meta name="description" content="A year-guessing game on your own Spotify playlist, in one page with no server." />
+  <link rel="stylesheet" href="../../../assets/wire.css" />
+</head>
+<body>
+  <main>
+    <a class="back" href="../../../">← Back to the drawer</a>
+    <span class="wire" aria-hidden="true"></span>
+    <h1>spillelista</h1>
+    <p class="lede">
+      A guessing game on one of your own Spotify playlists. It shuffles the
+      list and plays one song at a time; you guess the year, then flip the
+      card to see the year, title, artist and album. One HTML page with no
+      server and no build step.
+    </p>
+    <p><a href="../">Open the game →</a></p>
+
+    <h2>Why</h2>
+    <p>
+      A playlist you know is the best quiz, and Spotify already has it. The
+      page logs in with Spotify in the browser, with OAuth PKCE, so there is
+      nothing to host but static files: GitHub Pages is enough.
+    </p>
+
+    <h2>What you get</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>key</th><th>what it does</th></tr></thead>
+        <tbody>
+          <tr><td>Space</td><td>Flips the card: year, title, artist and album</td></tr>
+          <tr><td>Enter, →</td><td>The next song</td></tr>
+          <tr><td>P</td><td>Play or pause</td></tr>
+          <tr><td>R</td><td>The current song from the start</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      The page is in Norwegian. Playback goes through the Spotify Web
+      Playback SDK, which needs a Spotify Premium account.
+    </p>
+
+    <h2>Plug it in</h2>
+    <p>
+      To serve it yourself, register an app in the
+      <a href="https://developer.spotify.com/dashboard">Spotify dashboard</a>,
+      put its client ID in <code>config.json</code>, and add the address the
+      page is served from as a redirect URI. A client ID is not a secret.
+    </p>
+<pre>git clone https://github.com/beddari/claude-github &amp;&amp; cd claude-github
+<span class="d"># apps/spillelista/config.json: spotify.clients.spillelista.clientId</span>
+task spillelista:serve      <span class="d"># http://127.0.0.1:8000/</span></pre>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>served by</th><th>redirect URI</th></tr></thead>
+        <tbody>
+          <tr><td>task spillelista:serve</td><td><code>http://127.0.0.1:8000/</code></td></tr>
+          <tr><td>task serve</td><td><code>http://127.0.0.1:8000/apps/spillelista/</code></td></tr>
+          <tr><td>GitHub Pages</td><td><code>https://beddari.github.io/claude-github/apps/spillelista/</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      Not tested in a browser by CI: <code>task spillelista:ci</code> only
+      checks that <code>config.json</code> has a client ID.
+    </p>
+
+    <p>
+      <a href="https://github.com/beddari/claude-github/tree/main/apps/spillelista">Source and README on GitHub →</a>
+    </p>
+  </main>
+</body>
+</html>

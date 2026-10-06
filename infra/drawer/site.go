@@ -21,9 +21,10 @@ var targets = [][2]string{
 var skipInApps = map[string]bool{"bin": true, ".task": true, "Taskfile.yml": true, "README.md": true}
 
 // buildSite assembles the GitHub Pages site:
-//   - index.html + wires.json + assets/ at the root (the drawer)
-//   - apps/*  with an href: the whole folder (static, no build step)
-//   - tools/* with an href: only index.html; Go tools also get binaries + SHA256SUMS in dl/
+//   - index.html, wires.json and assets/ at the root: the landing page
+//   - apps/*: the whole folder, its page included
+//   - tools/* and labs/*: the index.html of the href; a Go tool also gets
+//     binaries and SHA256SUMS in dl/
 func buildSite(root, out string, log io.Writer) error {
 	ix, err := load(root)
 	if err != nil {
@@ -57,12 +58,12 @@ func buildSite(root, out string, log io.Writer) error {
 		src, dst := filepath.Join(root, w.Path), filepath.Join(out, filepath.FromSlash(w.Href))
 		fmt.Fprintf(log, "wire %s -> %s\n", w.Name, w.Href)
 		if strings.HasPrefix(w.Path, "apps/") {
-			if err := copyTree(src, dst); err != nil {
+			if err := copyTree(src, filepath.Join(out, filepath.FromSlash(w.Path))); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := copyFile(filepath.Join(src, "index.html"), filepath.Join(dst, "index.html")); err != nil {
+		if err := copyFile(filepath.Join(root, filepath.FromSlash(w.Href), "index.html"), filepath.Join(dst, "index.html")); err != nil {
 			return err
 		}
 		if _, err := os.Stat(filepath.Join(src, "go.mod")); err == nil {
