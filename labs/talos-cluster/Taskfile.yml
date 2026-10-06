@@ -10,7 +10,7 @@ tasks:
       - task --list
 
   up:
-    desc: Create the cluster, install the add-ons, issuer and demo, then run verify. About 5 minutes
+    desc: Create the cluster with its CA, install the add-ons, issuer and demos, then run verify. About 3.5 minutes
     silent: true
     cmds:
       - bin/up

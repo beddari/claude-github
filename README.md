@@ -10,8 +10,8 @@ landing page with one wire per experiment, published on GitHub Pages.
 |---|---|---|
 | [spillelista](apps/spillelista) | app | Spotify playlist page: log in, pick a list, play |
 | [skill-audit](tools/skill-audit) | tool | Checks Claude skills against current guidance and writes the prompt to fix them |
-| [acme-env](labs/acme-env) | lab | Split DNS and an internal ACME CA in podman: CoreDNS, etcd and step-ca |
-| [talos-cluster](labs/talos-cluster) | lab | Talos Kubernetes in Docker that gets DNS records and certificates from acme-env |
+| [acme-env](labs/acme-env) | lab | Split DNS and an internal ACME CA in podman: CoreDNS, etcd, step-ca and BIND for wildcards |
+| [talos-cluster](labs/talos-cluster) | lab | Talos Kubernetes in Docker that gets DNS records, certificates, a wildcard and its own CA from acme-env |
 
 On GitHub Pages, from every push to `main`:
 

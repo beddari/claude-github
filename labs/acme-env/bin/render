@@ -1,13 +1,35 @@
 #!/usr/bin/env bash
 #
-# Renders .run/Corefile from Corefile.tmpl and ../lab.env.
+# Renders .run/Corefile and .run/bind/ from their templates and ../lab.env.
+# Makes the TSIG secret for DNS-01 updates on the first run.
 #
 
 source "${0%/*}/functions.sh" || exit $?
 
-mkdir -p "$run_dir" || fail "Could not create $run_dir!"
-sed -e "s/__ZONE__/$zone/g" -e "s/__DNS_PORT__/$dns_port/g" \
-    -e "s/__HOST_IP__/$host_ip/g" -e "s/__ETCD_PORT__/$etcd_port/g" \
-    -e "s/__UPSTREAM_DNS__/$upstream_dns/g" \
-    "$root/Corefile.tmpl" > "$run_dir/Corefile" ||
+#
+# Fills in the settings in a template.
+#
+function fill()
+{
+	sed -e "s/__ZONE__/$zone/g" -e "s/__DNS_PORT__/$dns_port/g" \
+	    -e "s/__HOST_IP__/$host_ip/g" -e "s/__ETCD_PORT__/$etcd_port/g" \
+	    -e "s/__UPSTREAM_DNS__/$upstream_dns/g" \
+	    -e "s/__DNS_UPDATE_PORT__/$dns_update_port/g" \
+	    -e "s/__TSIG_NAME__/$tsig_name/g" \
+	    -e "s#__TSIG_SECRET__#$tsig_secret#g" "$1"
+}
+
+mkdir -p "$run_dir/bind" || fail "Could not create $run_dir/bind!"
+
+if [[ ! -s "$tsig_file" ]]; then
+	(umask 077 && head -c 32 /dev/urandom | base64 > "$tsig_file") ||
+		fail "Making the TSIG secret failed!"
+fi
+tsig_secret="$(< "$tsig_file")"
+
+fill "$root/Corefile.tmpl" > "$run_dir/Corefile" ||
 	fail "Rendering the Corefile failed!"
+fill "$root/bind/challenge.db.tmpl" > "$run_dir/bind/challenge.db" ||
+	fail "Rendering the zone failed!"
+(umask 077 && fill "$root/bind/named.conf.tmpl" > "$run_dir/bind/named.conf") ||
+	fail "Rendering named.conf failed!"

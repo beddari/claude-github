@@ -24,6 +24,10 @@ worker_ip="$net.3"
 host_ip="$(lab_host_ip)"
 run_dir="$root/.run"
 root_ca="$root/../acme-env/.run/root_ca.crt"
+# The cluster's Kubernetes CA, signed by acme-env's root.
+ca_dir="$run_dir/ca"
+# The secret of the TSIG key that cert-manager signs DNS-01 updates with.
+tsig_file="$root/../acme-env/.run/tsig.secret"
 
 cert_manager_version="v1.21.2"
 external_dns_version="1.23.0"

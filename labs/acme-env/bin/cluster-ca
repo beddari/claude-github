@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# Signs a CA for one cluster with the lab's root, so that everything the
+# cluster's CA issues chains to the root. Writes DIR/ca.crt and DIR/ca.key;
+# keeps them when they exist.
+#
+# Usage: bin/cluster-ca NAME DIR
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+# A cluster lives for days, not years; the root lives for ten.
+validity="43800h"
+
+[[ $# -eq 2 ]] || fail "usage: task acme-env:cluster-ca -- NAME DIR"
+cluster="$1"
+dir="$2"
+
+[[ -s "$dir/ca.crt" && -s "$dir/ca.key" ]] && exit 0
+
+log "Signing the CA of $cluster with the root of $ca_name ..."
+mkdir -p "$dir" || fail "Could not create $dir!"
+
+# The key never touches the CA's volume: step writes both files to a
+# temporary folder in the container, and tar hands them out on stdout.
+# shellcheck disable=SC2016
+(umask 077 && in_ca sh -ec '
+	out="$(mktemp -d)"
+	step certificate create "$1" "$out/ca.crt" "$out/ca.key" \
+		--profile intermediate-ca --not-after "$2" \
+		--ca /home/step/certs/root_ca.crt \
+		--ca-key /home/step/secrets/root_ca_key \
+		--ca-password-file /home/step/secrets/password \
+		--no-password --insecure >/dev/null 2>&1
+	tar -C "$out" -cf - ca.crt ca.key
+' sh "$cluster Kubernetes CA" "$validity" | tar -C "$dir" -xf -) ||
+	fail "Signing the CA of $cluster failed!"
+
+[[ -s "$dir/ca.crt" ]] || fail "No CA was written to $dir!"

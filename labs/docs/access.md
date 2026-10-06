@@ -100,6 +100,21 @@ The first is a TXT record that says which cluster owns the name. external-dns
 only changes or deletes names that its own cluster owns, so records added by
 hand are left alone.
 
+## DNS-01 updates, in BIND
+
+BIND listens on port 1054 and holds one zone, `_acme-challenge.lab.test`.
+It takes an update only when it is signed with the TSIG key `lab-dns01`,
+whose secret is in `labs/acme-env/.run/tsig.secret`. With BIND's
+`nsupdate`:
+
+```sh
+printf 'key hmac-sha256:lab-dns01 %s\nserver 127.0.0.1 1054\nzone _acme-challenge.lab.test\nupdate add _acme-challenge.lab.test 60 TXT "hello"\nsend\n' \
+	"$(cat labs/acme-env/.run/tsig.secret)" | nsupdate
+dig @127.0.0.1 -p 1053 +short TXT _acme-challenge.lab.test   # "hello", through CoreDNS
+```
+
+The zone lives in memory and starts empty on every `task acme-env:up`.
+
 ## The cluster, with kubectl
 
 ```sh
@@ -111,6 +126,14 @@ kubectl get ingress,certificate -A
 `task talos-cluster:status` shows the same and prints the `export` line. The
 API is on a random port of `127.0.0.1`, which Docker forwards to the control
 plane.
+
+The kubeconfig trusts the cluster's CA, `labs/talos-cluster/.run/ca/ca.crt`,
+which acme-env's root signed. Its client certificate comes from the same CA.
+To check the chain:
+
+```sh
+openssl x509 -in labs/talos-cluster/.run/ca/ca.crt -noout -subject -issuer
+```
 
 ## The nodes, with talosctl
 

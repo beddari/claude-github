@@ -16,6 +16,7 @@ flowchart TB
             coredns["CoreDNS<br/>:1053 UDP and TCP"]
             etcd[("etcd<br/>:23790")]
             stepca["step-ca<br/>ACME :8443"]
+            bind["BIND<br/>:1054 DNS-01 updates"]
         end
 
         subgraph docker["Docker network acme-lab: 10.5.0.0/24, gateway 10.5.0.1"]
@@ -37,6 +38,9 @@ flowchart TB
     extdns -- "writes records<br/>HTTP :23790" --> etcd
     coredns -- "reads the zone" --> etcd
     coredns -- "other names, :53" --> upstream
+    coredns -- "_acme-challenge.lab.test" --> bind
+    certm -- "DNS-01 tokens, RFC 2136<br/>TSIG, :1054" --> bind
+    stepca -. "signs each cluster's CA<br/>task acme-env:cluster-ca" .-> api
 
     certm -- "ACME orders<br/>HTTPS :8443" --> stepca
     stepca -- "resolves names<br/>127.0.0.1:1053" --> coredns
@@ -72,6 +76,7 @@ which works from the host, from containers and from the cluster.
 | 8443 | all host addresses | step-ca: ACME and `/health` | cert-manager, lego, you |
 | 23790 | all host addresses | etcd, client API | external-dns, `task acme-env:record-add` |
 | 23800 | `127.0.0.1` | etcd, peers | etcd alone |
+| 1054, UDP and TCP | all host addresses | BIND: the zone `_acme-challenge.<zone>`, and RFC 2136 updates signed with TSIG | CoreDNS of acme-env, cert-manager, lego |
 | 80, 443 | `10.5.0.3` | Traefik, as hostPorts on the worker | step-ca for HTTP-01, you |
 | 6443 | `10.5.0.2`, and a random port on `127.0.0.1` | Kubernetes API | kubectl, through `.run/kubeconfig` |
 | 50000 | `10.5.0.2` | Talos API | talosctl, through `.run/talosconfig` |
@@ -102,6 +107,24 @@ the challenge from the worker on port 80, and issues the certificate.
 cert-manager stores it in the Secret `whoami-tls`, and Traefik serves it a
 few seconds later. On a GitHub runner this takes about 20 seconds.
 
+**A wildcard certificate.** Only DNS-01 can prove `*.lab.test`: the token
+goes in a TXT record at `_acme-challenge.lab.test`. CoreDNS cannot take
+updates, so BIND holds that one zone, and CoreDNS forwards it there.
+cert-manager sends the token to BIND at `HOST_IP:1054` as an RFC 2136
+update, signed with the TSIG key `lab-dns01`; BIND refuses updates without
+it. cert-manager checks through CoreDNS that the token is there, step-ca
+looks it up the same way and issues the certificate, and cert-manager
+removes the token. The demo's Ingress `hello` serves the certificate from
+the Secret `wildcard-tls`.
+
+**The cluster's CA.** Before it creates a cluster, `task talos-cluster:up`
+has acme-env sign a CA for it with the root, in a throwaway container with
+the CA's volume. Config patches give Talos that CA in place of the one
+talosctl generates: the control plane issues from it, and every node trusts
+it alone. The API server's certificate and the cluster's client
+certificates, such as the one in `.run/kubeconfig`, chain to the root
+through it.
+
 **HTTPS from the host.** `curl --cacert .run/root_ca.crt` connects to
 `10.5.0.3:443`. Traefik picks the certificate by the name and routes to
 whoami.
@@ -117,7 +140,10 @@ step-ca resolves the name and fetches the challenge from the host itself.
 | Root, "Lab Internal CA Root CA" | `task acme-env:up`, once | 10 years | `task acme-env:trust`, `caBundle`, `--cacert` |
 | Intermediate, "Lab Internal CA Intermediate CA" | the same | 10 years | the root |
 | step-ca's own TLS | step-ca, at start | 24 hours, renewed by step-ca | the root |
-| An app's, such as `whoami.lab.test` | ACME, per name | 24 hours | the root; cert-manager renews it |
+| An app's, such as `whoami.lab.test` | ACME over HTTP-01, per name | 24 hours | the root; cert-manager renews it |
+| The wildcard, `*.lab.test` | ACME over DNS-01 | 24 hours | the root; cert-manager renews it |
+| A cluster's CA, such as "acme-lab Kubernetes CA" | `task acme-env:cluster-ca`, signed by the root | 5 years | the root |
+| The API server's and the cluster's client certificates | Talos, from the cluster's CA | as Talos sets them | the cluster's CA, then the root |
 
 step-ca's default is 24 hours, so certificates turn over every day.
 cert-manager renews at two thirds of the lifetime.

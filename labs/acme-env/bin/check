@@ -1,14 +1,54 @@
 #!/usr/bin/env bash
 #
-# The end-to-end test: publishes smoke.<zone> in etcd, gets a certificate for
-# it from step-ca over HTTP-01 with lego, which listens on port 80, and
-# verifies it against the root.
+# The end-to-end test, with lego as the ACME client:
+#
+# - HTTP-01: publishes smoke.<zone> in etcd and gets a certificate for it;
+#   lego answers the challenge on port 80.
+# - DNS-01: gets a certificate for *.<zone>; lego puts its token in BIND
+#   with an RFC 2136 update signed with TSIG.
+#
+# Both are verified against the root.
 #
 
 source "${0%/*}/functions.sh" || exit $?
 
+#
+# Runs lego against step-ca, with .run/ at /lab. Arguments go to "lego run".
+#
+function lego()
+{
+	local output status
+
+	output="$(pod run --rm --http-proxy=false --network host \
+		-v "$run_dir:/lab:Z" \
+		-e LEGO_CA_CERTIFICATES=/lab/root_ca.crt \
+		-e DNSUPDATE_NAMESERVER="127.0.0.1:$dns_update_port" \
+		-e DNSUPDATE_TSIG_KEY="$tsig_name" \
+		-e DNSUPDATE_TSIG_SECRET="$(< "$tsig_file")" \
+		-e DNSUPDATE_TSIG_ALGORITHM=hmac-sha256. "$img_lego" \
+		run --server "$acme_url" --accept-tos --email "smoke@$zone" \
+		--path /lab/lego "$@" 2>&1)"
+	status=$?
+	grep -E 'validated|certificate\.|ERROR' <<< "$output"
+	return $status
+}
+
+#
+# Verifies a certificate lego got against the root and a host name.
+#
+function verify()
+{
+	in_run_dir "
+		crt=/lab/lego/certificates/$1.crt
+		step certificate inspect --short \"\$crt\"
+		step certificate verify \"\$crt\" --roots /lab/root_ca.crt \
+			--host $2
+	"
+}
+
 ca_healthy || fail "$name is not up: task acme-env:up"
 [[ -f "$run_dir/root_ca.crt" ]] || "$root/bin/root" >/dev/null || exit $?
+[[ -s "$tsig_file" ]] || fail "No $tsig_file: task acme-env:up"
 
 "$root/bin/record-add" smoke "$host_ip" || exit $?
 trap '"$root/bin/record-rm" smoke >/dev/null' EXIT
@@ -16,18 +56,16 @@ trap '"$root/bin/record-rm" smoke >/dev/null' EXIT
 in_run_dir 'rm -rf /lab/lego' || fail "Removing the last run's files failed!"
 
 log "Getting a certificate for smoke.$zone over HTTP-01 ..."
-pod run --rm --http-proxy=false --network host -v "$run_dir:/lab:Z" \
-	-e LEGO_CA_CERTIFICATES=/lab/root_ca.crt "$img_lego" \
-	run --server "$acme_url" --accept-tos --email "smoke@$zone" \
-	--domains "smoke.$zone" --http --http.address :80 --path /lab/lego \
-	2>&1 | grep -E 'validated|certificate\.|ERROR' ||
-	fail "lego did not get a certificate!"
+lego --domains "smoke.$zone" --http --http.address :80 ||
+	fail "lego did not get a certificate over HTTP-01!"
+verify "smoke.$zone" "smoke.$zone" ||
+	fail "The certificate for smoke.$zone does not verify!"
 
-in_run_dir "
-	crt=/lab/lego/certificates/smoke.$zone.crt
-	step certificate inspect --short \"\$crt\"
-	step certificate verify \"\$crt\" --roots /lab/root_ca.crt \
-		--host smoke.$zone
-" || fail "The certificate does not verify against the root!"
+log "Getting a certificate for *.$zone over DNS-01 ..."
+lego --domains "*.$zone" --dns dnsupdate \
+	--dns.resolvers "127.0.0.1:$dns_port" --dns.propagation.disable-ans ||
+	fail "lego did not get a certificate over DNS-01!"
+verify "_.$zone" "anything.$zone" ||
+	fail "The certificate for *.$zone does not verify!"
 
-log "All good: step-ca issued smoke.$zone over HTTP-01 through CoreDNS."
+log "All good: step-ca issued smoke.$zone over HTTP-01, *.$zone over DNS-01."

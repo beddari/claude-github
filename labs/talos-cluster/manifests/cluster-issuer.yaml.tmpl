@@ -1,5 +1,10 @@
-# cert-manager → acme-env's step-ca over ACME HTTP-01, solved by Traefik.
-# caBundle lets cert-manager trust step-ca's TLS endpoint.
+# cert-manager → acme-env's step-ca over ACME. caBundle lets cert-manager
+# trust step-ca's TLS endpoint.
+#
+# HTTP-01, solved by Traefik, for every name but the wildcard. DNS-01 for
+# *.__ZONE__, which only DNS-01 can prove: cert-manager puts the token in
+# acme-env's BIND with an RFC 2136 update, signed with the TSIG key in the
+# Secret lab-dns01-tsig, which bin/issuer makes.
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -14,3 +19,13 @@ spec:
       - http01:
           ingress:
             ingressClassName: traefik
+      - selector:
+          dnsNames: ["*.__ZONE__"]
+        dns01:
+          rfc2136:
+            nameserver: __HOST_IP__:__DNS_UPDATE_PORT__
+            tsigKeyName: __TSIG_NAME__
+            tsigAlgorithm: HMACSHA256
+            tsigSecretSecretRef:
+              name: lab-dns01-tsig
+              key: secret

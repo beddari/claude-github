@@ -15,6 +15,10 @@ dns_port="$DNS_PORT"
 ca_port="$CA_PORT"
 etcd_port="$ETCD_PORT"
 etcd_peer_port="$ETCD_PEER_PORT"
+dns_update_port="$DNS_UPDATE_PORT"
+# The TSIG key that signs DNS-01 updates, by name. Its secret is made by
+# acme-env in acme-env/.run/tsig.secret.
+tsig_name="lab-dns01"
 upstream_dns="$UPSTREAM_DNS"
 
 #

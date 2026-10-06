@@ -1,10 +1,48 @@
 #!/usr/bin/env bash
 #
 # Creates the Talos cluster in Docker: one control plane and WORKERS
-# workers on SUBNET. Does nothing when it exists.
+# workers on SUBNET. Its Kubernetes CA is signed by acme-env's root. Does
+# nothing when the cluster exists.
 #
 
 source "${0%/*}/functions.sh" || exit $?
+
+#
+# Prints a PEM file indented, for a YAML block scalar.
+#
+function indent()
+{
+	sed "s/^/$1/" "$2"
+}
+
+#
+# Writes the config patches that give the cluster its CA: the control plane
+# issues from it, and every node accepts it alone in place of the CA that
+# talosctl generates.
+#
+function ca_patches()
+{
+	{
+		echo "apiVersion: v1alpha1"
+		echo "kind: KubeAPIServerCAConfig"
+		echo "issuingCA:"
+		echo "    cert: |"
+		indent "        " "$ca_dir/ca.crt"
+		echo "    key: |"
+		indent "        " "$ca_dir/ca.key"
+	} > "$ca_dir/controlplane.yaml" || return $?
+	{
+		echo "apiVersion: v1alpha1"
+		echo "kind: KubeAPIServerCAConfig"
+		echo "\$patch: delete"
+		echo "---"
+		echo "apiVersion: v1alpha1"
+		echo "kind: KubeAPIServerCAConfig"
+		echo "acceptedCAs:"
+		echo "    - |"
+		indent "      " "$ca_dir/ca.crt"
+	} > "$ca_dir/worker.yaml" || return $?
+}
 
 cluster_exists && exit 0
 
@@ -14,9 +52,13 @@ if [[ "$(uname -s)" == Linux && ! -e /proc/sys/net/bridge ]]; then
 	warn "br_netfilter is not loaded: sudo modprobe br_netfilter"
 fi
 
+"$root/../acme-env/bin/cluster-ca" "$cluster" "$ca_dir" || exit $?
+(umask 077 && ca_patches) || fail "Writing the CA's config patches failed!"
+
 log "Creating $cluster: 1 control plane, $workers worker(s), $subnet ..."
-mkdir -p "$run_dir" || fail "Could not create $run_dir!"
 talosctl cluster create docker --name "$cluster" \
 	--state "$run_dir/clusters" --subnet "$subnet" --workers "$workers" \
-	--talosconfig-destination "$TALOSCONFIG" "${talos_args[@]}" ||
+	--talosconfig-destination "$TALOSCONFIG" \
+	--config-patch-controlplanes "@$ca_dir/controlplane.yaml" \
+	--config-patch-workers "@$ca_dir/worker.yaml" "${talos_args[@]}" ||
 	fail "Creating $cluster failed!"

@@ -23,6 +23,8 @@ function row()
 log "Services of $name, zone $zone, on $host_ip:"
 row "DNS" "$host_ip:$dns_port (UDP and TCP)" "$dns_port" \
 	"task acme-env:dig -- ca"
+row "DNS-01 updates" "$host_ip:$dns_update_port, TSIG key $tsig_name" \
+	"$dns_update_port" "task acme-env:check"
 row "etcd" "http://$host_ip:$etcd_port" "$etcd_port" \
 	"task acme-env:records"
 row "ACME directory" "$acme_url" "$ca_port" \

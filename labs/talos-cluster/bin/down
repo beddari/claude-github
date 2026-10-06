@@ -17,5 +17,5 @@ talosctl cluster destroy --name "$cluster" --state "$run_dir/clusters"
 "$docker" ps -aq --filter "label=talos.cluster.name=$cluster" |
 	xargs -r "$docker" rm -f >/dev/null
 "$docker" network rm "$cluster" >/dev/null 2>&1
-rm -rf "$run_dir/clusters/$cluster" "$KUBECONFIG" "$TALOSCONFIG" ||
+rm -rf "$run_dir/clusters/$cluster" "$ca_dir" "$KUBECONFIG" "$TALOSCONFIG" ||
 	fail "Removing the cluster's files failed!"

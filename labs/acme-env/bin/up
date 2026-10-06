@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Starts etcd, CoreDNS and step-ca on the host network. Creates the CA on the
-# first run; later runs keep it, and the records, in their volumes.
+# Starts etcd, BIND, CoreDNS and step-ca on the host network. Creates the CA
+# on the first run; later runs keep it, and the records, in their volumes.
 #
 
 source "${0%/*}/functions.sh" || exit $?
@@ -69,7 +69,7 @@ function wait_for_ca()
 init_ca          || fail "Creating the CA failed!"
 "$root/bin/render" || exit $?
 
-log "Starting etcd, CoreDNS and step-ca on $host_ip ..."
+log "Starting etcd, BIND, CoreDNS and step-ca on $host_ip ..."
 start etcd -v "$name-etcd:/var/lib/etcd" "$img_etcd" \
 	etcd --name "$name" --data-dir /var/lib/etcd \
 	--listen-client-urls "http://0.0.0.0:$etcd_port" \
@@ -78,6 +78,13 @@ start etcd -v "$name-etcd:/var/lib/etcd" "$img_etcd" \
 	--initial-advertise-peer-urls "http://127.0.0.1:$etcd_peer_port" \
 	--initial-cluster "$name=http://127.0.0.1:$etcd_peer_port" ||
 	fail "Starting etcd failed!"
+# BIND gets a fresh copy of its zone, on a tmpfs: challenges are short-lived.
+start bind --tmpfs /var/lib/bind -v "$run_dir/bind:/lab:ro,Z" \
+	--entrypoint sh "$img_bind" -ec '
+		cp /lab/named.conf /lab/challenge.db /var/lib/bind/
+		chown -R bind:bind /var/lib/bind
+		exec named -g -u bind -c /var/lib/bind/named.conf
+	' || fail "Starting BIND failed!"
 start dns -v "$run_dir/Corefile:/etc/coredns/Corefile:ro,Z" \
 	"$img_coredns" -conf /etc/coredns/Corefile ||
 	fail "Starting CoreDNS failed!"

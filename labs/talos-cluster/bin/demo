@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 #
-# Deploys whoami with an Ingress. The Ingress makes external-dns publish
-# whoami.<zone> and cert-manager order its certificate.
+# Deploys whoami with an Ingress, and the wildcard demo. The Ingress makes
+# external-dns publish whoami.<zone> and cert-manager order its certificate
+# over HTTP-01; the wildcard is ordered over DNS-01 and serves hello.<zone>.
 #
 
 source "${0%/*}/functions.sh" || exit $?
 
 "$root/bin/render" || exit $?
-kubectl apply -f "$run_dir/whoami.yaml" || fail "Deploying whoami failed!"
+kubectl apply -f "$run_dir/whoami.yaml" -f "$run_dir/wildcard.yaml" ||
+	fail "Deploying whoami failed!"
 kubectl -n whoami rollout status deploy/whoami --timeout=180s ||
 	fail "whoami did not start!"
