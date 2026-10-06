@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# Removes a name, and every record under it, from the zone: record-rm NAME.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+[[ $# -eq 1 ]] || fail "usage: task acme-env:record-rm -- NAME"
+
+etcd del --prefix "$(record_key "$1")" >/dev/null ||
+	fail "Removing $1.$zone failed: is $name up?"
+log "$1.$zone removed"

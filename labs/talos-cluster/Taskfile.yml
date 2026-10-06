@@ -1,0 +1,88 @@
+# talos-cluster: Talos Kubernetes in Docker that consumes acme-env.
+# Each task calls a script in bin/; see README.md.
+version: "3"
+
+tasks:
+  # Plain "task" lists the tasks. It has no description, so it is not listed.
+  default:
+    silent: true
+    cmds:
+      - task --list
+
+  up:
+    desc: Create the cluster, install the add-ons, issuer and demo, then run verify. About 5 minutes
+    silent: true
+    cmds:
+      - bin/up
+
+  status:
+    desc: Show the nodes, the lab's workloads and the certificates
+    silent: true
+    cmds:
+      - bin/status
+
+  verify:
+    desc: "Run the end-to-end test: DNS from every node, certificate Ready, DNS record from external-dns, HTTPS trusted by the lab's root"
+    silent: true
+    cmds:
+      - bin/verify
+
+  debug:
+    desc: Print Helm, pods, events, logs and the cluster's DNS, for when up or verify fails
+    silent: true
+    cmds:
+      - bin/debug
+
+  create:
+    desc: "Step of up: create the Talos cluster in Docker"
+    silent: true
+    cmds:
+      - bin/create
+
+  kubeconfig:
+    desc: "Step of up: write .run/kubeconfig and wait for the nodes"
+    silent: true
+    cmds:
+      - bin/kubeconfig
+
+  dns-forward:
+    desc: "Step of up: forward the lab zone from the cluster's CoreDNS to acme-env"
+    silent: true
+    cmds:
+      - bin/dns-forward
+
+  addons:
+    desc: "Step of up: install Traefik, external-dns and cert-manager"
+    silent: true
+    cmds:
+      - bin/addons
+
+  issuer:
+    desc: "Step of up: create the ClusterIssuer step-ca"
+    silent: true
+    cmds:
+      - bin/issuer
+
+  demo:
+    desc: "Step of up: deploy whoami with an Ingress"
+    silent: true
+    cmds:
+      - bin/demo
+
+  down:
+    desc: Remove the demo and its DNS records, then destroy the cluster
+    prompt: Destroy the cluster and everything in it?
+    silent: true
+    cmds:
+      - bin/down
+
+  ci:
+    desc: Render the manifests and parse every YAML file, with no cluster needed
+    cmds:
+      - bin/render
+      - for f in .run/*.yaml values/*.yaml; do yq -e true "$f" >/dev/null; done
+
+  lint:
+    desc: Run shellcheck on the scripts
+    cmds:
+      - shellcheck -s bash -e SC2034,SC2154,SC1090,SC1091,SC2242 bin/* ../lab.sh

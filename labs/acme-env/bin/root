@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#
+# Copies the CA's root certificate to .run/root_ca.crt and prints its
+# fingerprint.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+mkdir -p "$run_dir" || fail "Could not create $run_dir!"
+in_ca cat /home/step/certs/root_ca.crt > "$run_dir/root_ca.crt" ||
+	fail "Reading the root certificate failed: task up first"
+log "Root certificate in $run_dir/root_ca.crt, fingerprint:"
+in_ca step certificate fingerprint /home/step/certs/root_ca.crt

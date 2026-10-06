@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Stops and removes the containers. The CA and the records stay in their
+# volumes.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+log "Stopping $name ..."
+pod rm -f "$name-ca" "$name-dns" "$name-etcd" >/dev/null ||
+	fail "Removing the containers failed!"

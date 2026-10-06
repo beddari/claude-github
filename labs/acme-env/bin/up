@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+#
+# Starts etcd, CoreDNS and step-ca on the host network. Creates the CA on the
+# first run; later runs keep it, and the records, in their volumes.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+#
+# Creates the root, the intermediate and an ACME provisioner, once.
+#
+function init_ca()
+{
+	local state
+
+	# "missing" is the only answer that may create a CA: a check that
+	# fails for another reason must not replace one that exists.
+	state="$(in_ca sh -c \
+		'[ -f /home/step/config/ca.json ] && echo ok || echo missing')"
+	case "$state" in
+		ok)		return ;;
+		missing)	;;
+		*)		return 1 ;;
+	esac
+
+	log "Creating $ca_name ..."
+	# The inner shell gets its values as $1 to $4, hence single quotes.
+	# shellcheck disable=SC2016
+	in_ca sh -ec '
+		mkdir -p /home/step/secrets
+		head -c 32 /dev/urandom | base64 > /home/step/secrets/password
+		step ca init --deployment-type standalone --name "$1" \
+			--dns "$2" --address ":$3" --provisioner "$4" --acme \
+			--password-file /home/step/secrets/password \
+			--provisioner-password-file /home/step/secrets/password
+	' sh "$ca_name" "ca.$zone,$host_ip,localhost,127.0.0.1" "$ca_port" \
+		"admin@$zone" >/dev/null || return $?
+}
+
+#
+# Starts one container on the host network. The lab only talks to local
+# addresses, so the host's proxy settings are kept out.
+#
+function start()
+{
+	local container="$1"
+	shift
+
+	pod run -d --replace --http-proxy=false --network host \
+		--label "lab=$name" --name "$name-$container" "$@" >/dev/null
+}
+
+#
+# Waits up to a minute for step-ca to answer.
+#
+function wait_for_ca()
+{
+	local i
+
+	for i in $(seq 60); do
+		ca_healthy && return
+		sleep 1
+	done
+	return 1
+}
+
+[[ -n "$host_ip" ]] || fail "No host address; set HOST_IP in labs/lab.env"
+
+init_ca          || fail "Creating the CA failed!"
+"$root/bin/render" || exit $?
+
+log "Starting etcd, CoreDNS and step-ca on $host_ip ..."
+start etcd -v "$name-etcd:/var/lib/etcd" "$img_etcd" \
+	etcd --name "$name" --data-dir /var/lib/etcd \
+	--listen-client-urls "http://0.0.0.0:$etcd_port" \
+	--advertise-client-urls "http://$host_ip:$etcd_port" \
+	--listen-peer-urls "http://127.0.0.1:$etcd_peer_port" \
+	--initial-advertise-peer-urls "http://127.0.0.1:$etcd_peer_port" \
+	--initial-cluster "$name=http://127.0.0.1:$etcd_peer_port" ||
+	fail "Starting etcd failed!"
+start dns -v "$run_dir/Corefile:/etc/coredns/Corefile:ro,Z" \
+	"$img_coredns" -conf /etc/coredns/Corefile ||
+	fail "Starting CoreDNS failed!"
+start ca -v "$name-ca:/home/step" "$img_step_ca" \
+	step-ca /home/step/config/ca.json \
+	--password-file /home/step/secrets/password \
+	--resolver "127.0.0.1:$dns_port" ||
+	fail "Starting step-ca failed!"
+
+wait_for_ca      || fail "step-ca did not answer within a minute: task logs"
+"$root/bin/root" || exit $?
+"$root/bin/status"

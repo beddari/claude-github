@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Lists the services, their addresses and whether each one answers.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+#
+# Prints one service row: name, address, up or down, and what to run next.
+#
+function row()
+{
+	local service="$1"
+	local address="$2"
+	local port="$3"
+	local next="$4"
+	local state=down
+
+	answers "$host_ip" "$port" && state=up
+	printf '  %-16s %-45s %-5s %s\n' "$service" "$address" "$state" "$next"
+}
+
+log "Services of $name, zone $zone, on $host_ip:"
+row "DNS" "$host_ip:$dns_port (UDP and TCP)" "$dns_port" \
+	"task acme-env:dig -- ca"
+row "etcd" "http://$host_ip:$etcd_port" "$etcd_port" \
+	"task acme-env:records"
+row "ACME directory" "$acme_url" "$ca_port" \
+	"task acme-env:check"
+echo "  Root certificate $run_dir/root_ca.crt"

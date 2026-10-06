@@ -1,0 +1,49 @@
+name: labs
+
+# End-to-end run of labs/: acme-env in podman, then a Talos cluster in Docker
+# that gets DNS records and certificates from it. Slow (~10 min), so it only
+# runs when labs/ changes, or on demand.
+on:
+  pull_request:
+    paths: ['labs/**', '.github/workflows/labs.yml']
+  push:
+    branches: [main]
+    paths: ['labs/**', '.github/workflows/labs.yml']
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Rootful podman so the ACME smoke test can bind port 80.
+      PODMAN: sudo podman
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools (Homebrew is preinstalled on ubuntu runners)
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install go-task talosctl
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+      - run: task ci
+      - name: acme-env up + end-to-end test
+        run: |
+          task acme-env:up
+          task acme-env:check
+      - name: talos-cluster up + verify
+        run: |
+          # Lets a pod reach a service whose pod is on the same node.
+          sudo modprobe br_netfilter
+          task talos-cluster:up
+      - name: Diagnostics
+        if: failure()
+        run: |
+          task acme-env:status || true
+          sudo podman logs acme-env-ca 2>&1 | tail -50 || true
+          task acme-env:records || true
+          task talos-cluster:debug || true
+      - name: Tear down
+        if: always()
+        run: |
+          task --yes talos-cluster:down || true
+          task acme-env:down || true

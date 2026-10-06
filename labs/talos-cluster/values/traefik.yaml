@@ -1,0 +1,21 @@
+# Traefik as the ingress controller, on every worker's ports 80/443.
+# Talos-in-Docker has no LoadBalancer, so ingresses get the worker's IP
+# as their status address (set by the Taskfile), which external-dns publishes.
+deployment:
+  kind: DaemonSet
+ports:
+  web:
+    hostPort: 80
+  websecure:
+    hostPort: 443
+service:
+  type: ClusterIP
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+providers:
+  kubernetesIngress:
+    publishedService:
+      enabled: false
+    ingressEndpoint:
+      ip: ""  # --set by the Taskfile to the first worker's IP

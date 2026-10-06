@@ -1,0 +1,13 @@
+# external-dns writes Ingress/Service hostnames in the lab zone into
+# acme-env's etcd, which acme-env's CoreDNS serves (coredns provider).
+provider:
+  name: coredns
+env:
+  - name: ETCD_URLS
+    value: ""  # --set by the Taskfile to http://HOST_IP:ETCD_PORT
+sources: [ingress, service]
+domainFilters: []  # --set by the Taskfile to the lab zone
+policy: sync
+registry: txt
+txtOwnerId: ""  # --set by the Taskfile to the cluster name
+interval: 10s

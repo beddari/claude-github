@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#
+# Shows the nodes, the lab's workloads and the certificates.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+cluster_exists || fail "$cluster does not exist: task talos-cluster:up"
+
+kubectl get nodes -o wide
+kubectl get pods -A -o wide --field-selector=metadata.namespace!=kube-system
+kubectl get ingress,certificate -A
+log "export KUBECONFIG=$KUBECONFIG"

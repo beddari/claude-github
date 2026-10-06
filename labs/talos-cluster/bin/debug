@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# Prints what helps when up or verify fails: br_netfilter on this host,
+# Helm, nodes, pods, events and logs per lab namespace, the cluster's
+# CoreDNS, and acme-env's DNS over UDP and TCP from the cluster's Docker
+# network. Never fails itself.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+#
+# Prints a section heading.
+#
+function section()
+{
+	echo
+	log "$1"
+}
+
+section "This host"
+if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
+	echo "br_netfilter: loaded, bridge-nf-call-iptables =" \
+		"$(< /proc/sys/net/bridge/bridge-nf-call-iptables)"
+else
+	echo "br_netfilter: not loaded"
+fi
+
+section "Helm"
+helm version --short
+helm list -A
+
+section "Nodes and pods"
+kubectl get nodes -o wide
+kubectl get pods -A -o wide
+
+for ns in traefik external-dns cert-manager whoami; do
+	kubectl get ns "$ns" >/dev/null 2>&1 || continue
+	section "$ns: pods, events, logs"
+	kubectl -n "$ns" describe pods |
+		grep -E '^(Name:|Status:)|Reason|Message|Warning|Failed|pull' |
+		head -40
+	kubectl -n "$ns" get events --sort-by=.lastTimestamp | tail -20
+	kubectl -n "$ns" logs --all-containers --prefix --tail=40 \
+		-l app.kubernetes.io/instance 2>/dev/null | tail -60
+done
+kubectl get ingress,certificate,certificaterequest,order,challenge -A \
+	2>/dev/null
+
+section "Cluster CoreDNS"
+kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}'
+kubectl -n kube-system logs -l k8s-app=kube-dns --tail=20 --prefix
+
+section "acme-env's DNS from the cluster's network: UDP, then TCP"
+"$docker" run --rm --network "$cluster" docker.io/library/alpine:3 sh -c "
+	apk add -q bind-tools >/dev/null
+	dig @$host_ip -p $dns_port +time=3 +tries=1 +short ca.$zone
+	dig @$host_ip -p $dns_port +tcp +time=3 +tries=1 +short ca.$zone"
+
+exit 0

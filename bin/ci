@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# Checks the drawer's index and the docs' links, then runs the ci task of
+# every project. Stops at the first failure.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+drawer check || fail "wires.json does not match the projects!"
+drawer docs  || fail "A markdown link is broken!"
+
+for dir in $(projects); do
+	log "$dir"
+	task -d "$root/$dir" ci || fail "$dir: task ci failed!"
+done
+log "All good: every project's ci passed."

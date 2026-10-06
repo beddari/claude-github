@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# Renders manifests/*.yaml.tmpl into .run/, with the zone, the CA port and
+# acme-env's root certificate as the issuer's CA bundle.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+bundle="NO_ROOT_CA_YET"
+if [[ -f "$root_ca" ]]; then
+	bundle="$(base64 < "$root_ca" | tr -d '\n')" ||
+		fail "Encoding $root_ca failed!"
+fi
+
+mkdir -p "$run_dir" || fail "Could not create $run_dir!"
+for tmpl in "$root"/manifests/*.yaml.tmpl; do
+	out="${tmpl##*/}"
+	sed -e "s/__ZONE__/$zone/g" -e "s/__CA_PORT__/$ca_port/g" \
+	    -e "s#__CA_BUNDLE__#$bundle#g" "$tmpl" > "$run_dir/${out%.tmpl}" ||
+		fail "Rendering ${tmpl##*/} failed!"
+done

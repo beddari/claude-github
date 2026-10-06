@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# Creates the Talos cluster in Docker: one control plane and WORKERS
+# workers on SUBNET. Does nothing when it exists.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+cluster_exists && exit 0
+
+# Without br_netfilter on a Linux host, a pod cannot reach a service whose
+# pod is on the same node: CI saw DNS lookups time out exactly then.
+if [[ "$(uname -s)" == Linux && ! -e /proc/sys/net/bridge ]]; then
+	warn "br_netfilter is not loaded: sudo modprobe br_netfilter"
+fi
+
+log "Creating $cluster: 1 control plane, $workers worker(s), $subnet ..."
+mkdir -p "$run_dir" || fail "Could not create $run_dir!"
+talosctl cluster create docker --name "$cluster" \
+	--state "$run_dir/clusters" --subnet "$subnet" --workers "$workers" \
+	--talosconfig-destination "$TALOSCONFIG" "${talos_args[@]}" ||
+	fail "Creating $cluster failed!"

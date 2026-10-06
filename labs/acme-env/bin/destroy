@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# Removes the containers, the CA and the records. A new CA has a new root,
+# which has to be trusted again.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+"$root/bin/down" || exit $?
+
+if [[ -d "$run_dir" ]]; then
+	in_run_dir 'rm -rf /lab/lego' || fail "Removing lego's files failed!"
+fi
+
+log "Deleting the CA and the records ..."
+pod volume rm -f "$name-ca" "$name-etcd" >/dev/null ||
+	fail "Removing the volumes failed!"
+rm -rf "$run_dir" || fail "Removing $run_dir failed!"

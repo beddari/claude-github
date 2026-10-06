@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# The end-to-end test: publishes smoke.<zone> in etcd, gets a certificate for
+# it from step-ca over HTTP-01 with lego, which listens on port 80, and
+# verifies it against the root.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+ca_healthy || fail "$name is not up: task acme-env:up"
+[[ -f "$run_dir/root_ca.crt" ]] || "$root/bin/root" >/dev/null || exit $?
+
+"$root/bin/record-add" smoke "$host_ip" || exit $?
+trap '"$root/bin/record-rm" smoke >/dev/null' EXIT
+
+in_run_dir 'rm -rf /lab/lego' || fail "Removing the last run's files failed!"
+
+log "Getting a certificate for smoke.$zone over HTTP-01 ..."
+pod run --rm --http-proxy=false --network host -v "$run_dir:/lab:Z" \
+	-e LEGO_CA_CERTIFICATES=/lab/root_ca.crt "$img_lego" \
+	run --server "$acme_url" --accept-tos --email "smoke@$zone" \
+	--domains "smoke.$zone" --http --http.address :80 --path /lab/lego \
+	2>&1 | grep -E 'validated|certificate\.|ERROR' ||
+	fail "lego did not get a certificate!"
+
+in_run_dir "
+	crt=/lab/lego/certificates/smoke.$zone.crt
+	step certificate inspect --short \"\$crt\"
+	step certificate verify \"\$crt\" --roots /lab/root_ca.crt \
+		--host smoke.$zone
+" || fail "The certificate does not verify against the root!"
+
+log "All good: step-ca issued smoke.$zone over HTTP-01 through CoreDNS."

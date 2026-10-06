@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#
+# The end-to-end test: a pod on every node resolves ca.<zone>, the
+# certificate is Ready, whoami.<zone> resolves to the worker through
+# acme-env's DNS, and HTTPS from this computer verifies against the root.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+fqdn="whoami.$zone"
+
+#
+# Tells whether the name resolves to the worker through acme-env.
+#
+function resolves()
+{
+	[[ "$(dig @"$host_ip" -p "$dns_port" +short "$fqdn" | tail -1)" == \
+		"$worker_ip" ]]
+}
+
+#
+# Tells whether HTTPS answers with a certificate the lab's root trusts.
+#
+function serves()
+{
+	curl -fsS --noproxy '*' --cacert "$root_ca" \
+		--resolve "$fqdn:443:$worker_ip" "https://$fqdn/" |
+		grep -E '^(Hostname|Host):'
+}
+
+#
+# Tells whether a pod on a node resolves ca.<zone> through kube-dns. Run on
+# every node, it covers the pod that shares its node with CoreDNS.
+#
+function resolves_on()
+{
+	local node="$1"
+
+	kubectl run "dns-probe-$node" --rm -i --quiet --restart=Never \
+		--image=docker.io/library/busybox:1.37 --overrides="{\"spec\":
+		{\"nodeName\": \"$node\", \"tolerations\": [{\"operator\":
+		\"Exists\"}]}}" -- nslookup "ca.$zone." 2>/dev/null |
+		grep -q "$host_ip"
+}
+
+for node in $(kubectl get nodes -o name); do
+	node="${node#node/}"
+	resolves_on "$node" || fail "A pod on $node cannot resolve ca.$zone!"
+	log "A pod on $node resolves ca.$zone"
+done
+
+kubectl -n whoami wait certificate/whoami-tls --for=condition=Ready \
+	--timeout=300s || fail "The certificate is not Ready!"
+
+retry 60 resolves || fail "$fqdn does not resolve to $worker_ip!"
+log "$fqdn -> $worker_ip, published by external-dns"
+
+# Traefik loads the new secret a few seconds after the Certificate is Ready.
+retry 30 serves || fail "$fqdn serves no certificate the lab's root trusts!"
+
+echo | openssl s_client -connect "$worker_ip:443" -servername "$fqdn" \
+	2>/dev/null | openssl x509 -noout -issuer -enddate
+log "All good: $fqdn has a record from external-dns and a step-ca cert."

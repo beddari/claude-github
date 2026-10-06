@@ -1,17 +1,13 @@
-# https://taskfile.dev — run `task --list` to see everything.
-version: '3'
-
-vars:
-  # Override on the command line: task audit SKILLS="~/.claude/skills ./my-plugin/skills"
-  SKILLS: '{{.SKILLS | default ""}}'
-  PROMPTS: '{{.PROMPTS | default "prompts"}}'
+# skill-audit: a Go CLI. Its logic is Go, so the tasks are commands;
+# arguments go after --. See README.md.
+version: "3"
 
 tasks:
+  # Plain "task" lists the tasks. It has no description, so it is not listed.
   default:
-    desc: Format, vet, test and build, then audit your skills
+    silent: true
     cmds:
-      - task: ci
-      - task: audit
+      - task --list
 
   fmt:
     desc: gofmt all sources
@@ -60,53 +56,46 @@ tasks:
       - echo "verify OK"
 
   audit:
+    desc: "Audit skills; with no paths, ~/.claude/skills and ./.claude/skills. Flags and paths after --"
     dir: '{{.USER_WORKING_DIR}}'
-    desc: Audit skills (default ~/.claude/skills and ./.claude/skills; set SKILLS=... to override)
     deps: [build]
     cmds:
-      - '{{.TASKFILE_DIR}}/bin/skill-audit {{.CLI_ARGS}} {{.SKILLS}}'
+      - '{{.TASKFILE_DIR}}/bin/skill-audit {{.CLI_ARGS}}'
 
-  audit:md:
+  report:
+    desc: "Write the audit as markdown to skill-audit.md. Paths after --"
     dir: '{{.USER_WORKING_DIR}}'
-    desc: Write a markdown audit report to skill-audit.md
     deps: [build]
     cmds:
-      - '{{.TASKFILE_DIR}}/bin/skill-audit -format markdown {{.SKILLS}} > skill-audit.md'
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -format markdown {{.CLI_ARGS}} > skill-audit.md'
       - echo "wrote skill-audit.md"
 
-  audit:json:
-    dir: '{{.USER_WORKING_DIR}}'
-    desc: Print the audit as JSON
-    deps: [build]
-    cmds:
-      - '{{.TASKFILE_DIR}}/bin/skill-audit -format json {{.SKILLS}}'
-
   prompt:
+    desc: "Print one Claude prompt that fixes every skill needing work. Paths after --"
     dir: '{{.USER_WORKING_DIR}}'
-    desc: Print one Claude prompt that fixes every skill needing work
     deps: [build]
     cmds:
-      - '{{.TASKFILE_DIR}}/bin/skill-audit -prompt {{.CLI_ARGS}} {{.SKILLS}}'
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -prompt {{.CLI_ARGS}}'
 
   prompts:
+    desc: "Write one prompts/<skill>.prompt.md per skill needing work. Paths after --"
     dir: '{{.USER_WORKING_DIR}}'
-    desc: Write one <skill>.prompt.md per skill needing work into PROMPTS (default ./prompts)
     deps: [build]
     cmds:
-      - mkdir -p {{.PROMPTS}}
-      - '{{.TASKFILE_DIR}}/bin/skill-audit -prompt -prompt-dir {{.PROMPTS}} {{.SKILLS}} > {{.PROMPTS}}/ALL.prompt.md'
-      - ls -1 {{.PROMPTS}}
+      - mkdir -p prompts
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -prompt -prompt-dir prompts {{.CLI_ARGS}} > prompts/ALL.prompt.md'
+      - ls -1 prompts
 
   fix:
+    desc: "Start Claude Code with the fix prompt as its first message (needs the claude CLI). Paths after --"
     dir: '{{.USER_WORKING_DIR}}'
-    desc: Start an interactive Claude Code session seeded with the fix prompt (needs the `claude` CLI)
     deps: [build]
+    interactive: true
     preconditions:
       - sh: command -v claude
-        msg: "claude CLI not found — run `task prompt` and paste the output instead"
+        msg: "The claude CLI is missing: run task skill-audit:prompt and paste its output"
     cmds:
-      - 'claude "$({{.TASKFILE_DIR}}/bin/skill-audit -prompt {{.SKILLS}})"'
-    interactive: true
+      - 'claude "$({{.TASKFILE_DIR}}/bin/skill-audit -prompt {{.CLI_ARGS}})"'
 
   checks:
     desc: List every check and the rule it enforces

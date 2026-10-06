@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# Makes the cluster's CoreDNS forward the lab zone to acme-env's CoreDNS.
+# Replaces an older block for the zone; does nothing when it is current.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+block="$zone:53 {
+    errors
+    cache 5
+    forward . $host_ip:$dns_port
+}"
+
+corefile="$(kubectl -n kube-system get cm coredns \
+	-o jsonpath='{.data.Corefile}')" || fail "Reading the Corefile failed!"
+
+# Every block for the zone is dropped, and the current one appended.
+base="$(awk -v zone="$zone:53 {" '
+	$0 == zone { skip = 1 }
+	!skip      { print }
+	skip && /^}/ { skip = 0 }
+' <<< "$corefile")"
+want="$base"$'\n\n'"$block"
+
+if [[ "$corefile" == "$want" ]]; then
+	log "CoreDNS already forwards $zone to $host_ip:$dns_port"
+	exit 0
+fi
+
+log "Forwarding $zone to $host_ip:$dns_port ..."
+kubectl -n kube-system patch cm coredns --type merge -p "$(jq -n \
+	--arg c "$want" '{data: {Corefile: $c}}')" >/dev/null ||
+	fail "Patching the Corefile failed!"
+kubectl -n kube-system rollout restart deploy/coredns >/dev/null ||
+	fail "Restarting CoreDNS failed!"
+kubectl -n kube-system rollout status deploy/coredns --timeout=120s ||
+	fail "CoreDNS did not come back!"

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#
+# Renders .run/Corefile from Corefile.tmpl and ../lab.env.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+mkdir -p "$run_dir" || fail "Could not create $run_dir!"
+sed -e "s/__ZONE__/$zone/g" -e "s/__DNS_PORT__/$dns_port/g" \
+    -e "s/__HOST_IP__/$host_ip/g" -e "s/__ETCD_PORT__/$etcd_port/g" \
+    -e "s/__UPSTREAM_DNS__/$upstream_dns/g" \
+    "$root/Corefile.tmpl" > "$run_dir/Corefile" ||
+	fail "Rendering the Corefile failed!"

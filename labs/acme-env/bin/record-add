@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# Adds an A record to the zone in etcd: record-add NAME IP.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+[[ $# -eq 2 ]] || fail "usage: task acme-env:record-add -- NAME IP"
+
+etcd put "$(record_key "$1")" "{\"host\":\"$2\",\"ttl\":30}" >/dev/null ||
+	fail "Adding $1.$zone failed: is $name up?"
+log "$1.$zone -> $2"

@@ -1,0 +1,100 @@
+# acme-env: split DNS and an internal ACME CA for local clusters, in podman.
+# Each task calls a script in bin/; see README.md.
+version: "3"
+
+tasks:
+  # Plain "task" lists the tasks. It has no description, so it is not listed.
+  default:
+    silent: true
+    cmds:
+      - task --list
+
+  up:
+    desc: Start etcd, CoreDNS and step-ca; creates the CA on the first run
+    silent: true
+    cmds:
+      - bin/up
+
+  status:
+    desc: List the services, their addresses and whether each one answers
+    silent: true
+    cmds:
+      - bin/status
+
+  check:
+    desc: "Run the end-to-end test: a certificate for smoke.<zone> over HTTP-01 (binds port 80)"
+    silent: true
+    cmds:
+      - bin/check
+
+  root:
+    desc: Copy the CA's root certificate to .run/root_ca.crt and print its fingerprint
+    silent: true
+    cmds:
+      - bin/root
+
+  trust:
+    desc: Add the CA's root to this computer's trust store (step CLI, asks for sudo)
+    silent: true
+    cmds:
+      - bin/trust
+
+  untrust:
+    desc: Remove the CA's root from this computer's trust store
+    silent: true
+    cmds:
+      - bin/untrust
+
+  record-add:
+    desc: "Add an A record to the zone: task acme-env:record-add -- NAME IP"
+    silent: true
+    cmds:
+      - bin/record-add {{.CLI_ARGS}}
+
+  record-rm:
+    desc: "Remove a name from the zone: task acme-env:record-rm -- NAME"
+    silent: true
+    cmds:
+      - bin/record-rm {{.CLI_ARGS}}
+
+  records:
+    desc: List every record in etcd, as external-dns and record-add wrote them
+    silent: true
+    cmds:
+      - bin/records
+
+  dig:
+    desc: "Resolve a name in the zone through the lab's CoreDNS: task acme-env:dig -- NAME"
+    silent: true
+    cmds:
+      - bin/dig {{.CLI_ARGS}}
+
+  logs:
+    desc: "Follow a container's log: task acme-env:logs -- ca, dns or etcd"
+    silent: true
+    cmds:
+      - bin/logs {{.CLI_ARGS}}
+
+  down:
+    desc: Stop the containers, keep the CA and the records
+    silent: true
+    cmds:
+      - bin/down
+
+  destroy:
+    desc: Delete the containers, the CA and the records
+    prompt: Delete the CA and every record? Its root has to be trusted again.
+    silent: true
+    cmds:
+      - bin/destroy
+
+  ci:
+    desc: Render the Corefile and check it, with no podman needed
+    cmds:
+      - bin/render
+      - grep -q "ca.$(. ../lab.env; echo "$ZONE")" .run/Corefile
+
+  lint:
+    desc: Run shellcheck on the scripts
+    cmds:
+      - shellcheck -s bash -e SC2034,SC2154,SC1090,SC1091,SC2242 bin/* ../lab.sh

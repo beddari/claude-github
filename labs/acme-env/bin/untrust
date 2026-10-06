@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Removes the CA's root from this computer's trust store.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+command -v step >/dev/null || fail "step is missing: task tools"
+
+step certificate uninstall "$run_dir/root_ca.crt" ||
+	fail "Removing the root certificate failed!"

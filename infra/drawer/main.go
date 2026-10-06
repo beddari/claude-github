@@ -15,11 +15,12 @@ import (
 const usage = `drawer — keep the wire drawer in order
 
 Usage:
-  drawer [-root DIR] check                           every apps/* and tools/* project is in wires.json, and every entry is valid
-  drawer [-root DIR] add NAME PATH KIND [BLURB]      append a wire (KIND: app | tool)
+  drawer [-root DIR] check                           every apps/*, tools/* and labs/* project is in wires.json, and every entry is valid
+  drawer [-root DIR] add NAME PATH KIND [BLURB]      append a wire (KIND: app | tool | lab)
   drawer [-root DIR] site [OUT]                      build the Pages site into OUT (default _site)
   drawer serve [-port 8000] [DIR]                    serve DIR (default .) at http://127.0.0.1:PORT/
   drawer json FILE KEY.PATH                          print a JSON string value; fail if missing or empty
+  drawer [-root DIR] docs                            every relative link in every markdown file points to a file and heading that exist
 
 -root defaults to the nearest parent directory containing wires.json.
 `
@@ -96,6 +97,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 			} else {
 				fmt.Fprintf(stdout, "%s already listed\n", args[1])
 			}
+		}
+	case cmd == "docs" && len(args) == 0:
+		var problems []string
+		var n int
+		if problems, n, err = checkDocs(r); err == nil {
+			for _, p := range problems {
+				fmt.Fprintln(stderr, p)
+			}
+			if len(problems) > 0 {
+				fmt.Fprintf(stderr, "%d broken link(s) in %d markdown files\n", len(problems), n)
+				return 1
+			}
+			fmt.Fprintf(stdout, "docs OK (%d markdown files, all relative links resolve)\n", n)
 		}
 	case cmd == "site" && len(args) <= 1:
 		out := filepath.Join(r, "_site")

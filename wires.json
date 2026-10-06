@@ -14,6 +14,18 @@
       "kind": "tool",
       "blurb": "Go CLI that audits Claude skills against current best practice and writes the prompt to fix them.",
       "href": "tools/skill-audit/"
+    },
+    {
+      "name": "acme-env",
+      "path": "labs/acme-env",
+      "kind": "lab",
+      "blurb": "Split DNS and an internal ACME CA in podman: CoreDNS, etcd and step-ca issuing per-name certificates over HTTP-01."
+    },
+    {
+      "name": "talos-cluster",
+      "path": "labs/talos-cluster",
+      "kind": "lab",
+      "blurb": "Talos Kubernetes in Docker that consumes acme-env: external-dns publishes into its DNS and cert-manager gets certificates from its CA."
     }
   ]
 }
