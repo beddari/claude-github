@@ -34,7 +34,7 @@ func (s *Skill) refs(d *Doc) Refs {
 			if s.Files[cand] && cand != d.Rel {
 				return cand, true
 			}
-			// Case-insensitive fallback: Claude will find README.md for readme.md.
+			// Falls back to a case-insensitive match.
 			for f := range s.Files {
 				if strings.EqualFold(f, cand) && f != d.Rel {
 					return f, true

@@ -1,5 +1,5 @@
 # shellcheck shell=bash disable=SC2153
-# SC2153: ZONE, DNS_PORT and the rest are set in lab.env.
+# SC2153: the uppercase settings come from lab.env.
 #
 # Shared by the labs: logging, the settings in lab.env and the host address.
 # Sourced by each lab's bin/functions.sh, never run.
@@ -16,8 +16,7 @@ ca_port="$CA_PORT"
 etcd_port="$ETCD_PORT"
 etcd_peer_port="$ETCD_PEER_PORT"
 dns_update_port="$DNS_UPDATE_PORT"
-# The TSIG key that signs DNS-01 updates, by name. Its secret is made by
-# acme-env in acme-env/.run/tsig.secret.
+# Name of the TSIG key for DNS-01 updates. Its secret: acme-env/.run/tsig.secret.
 tsig_name="lab-dns01"
 upstream_dns="$UPSTREAM_DNS"
 
@@ -81,7 +80,7 @@ function lab_host_ip()
 		read -r first _ <<< "$(hostname -I)"
 		echo "$first"
 	else
-		# macOS: podman runs in a VM; set HOST_IP in lab.env.
+		# macOS; podman there runs in a VM: labs/docs/troubleshooting.md.
 		ipconfig getifaddr en0
 	fi
 }

@@ -13,8 +13,7 @@ function init_ca()
 {
 	local state
 
-	# "missing" is the only answer that may create a CA: a check that
-	# fails for another reason must not replace one that exists.
+	# Only "missing" creates a CA; any other answer keeps the volume as it is.
 	state="$(in_ca sh -c \
 		'[ -f /home/step/config/ca.json ] && echo ok || echo missing')"
 	case "$state" in
@@ -24,7 +23,6 @@ function init_ca()
 	esac
 
 	log "Creating $ca_name ..."
-	# The inner shell gets its values as $1 to $4, hence single quotes.
 	# shellcheck disable=SC2016
 	in_ca sh -ec '
 		mkdir -p /home/step/secrets
@@ -38,8 +36,8 @@ function init_ca()
 }
 
 #
-# Starts one container on the host network. The lab only talks to local
-# addresses, so the host's proxy settings are kept out.
+# Starts one container on the host network, without the host's proxy
+# settings: labs/docs/troubleshooting.md.
 #
 function start()
 {
@@ -78,7 +76,7 @@ start etcd -v "$name-etcd:/var/lib/etcd" "$img_etcd" \
 	--initial-advertise-peer-urls "http://127.0.0.1:$etcd_peer_port" \
 	--initial-cluster "$name=http://127.0.0.1:$etcd_peer_port" ||
 	fail "Starting etcd failed!"
-# BIND gets a fresh copy of its zone, on a tmpfs: challenges are short-lived.
+# BIND's zone is on a tmpfs and starts empty.
 start bind --tmpfs /var/lib/bind -v "$run_dir/bind:/lab:ro,Z" \
 	--entrypoint sh "$img_bind" -ec '
 		cp /lab/named.conf /lab/challenge.db /var/lib/bind/

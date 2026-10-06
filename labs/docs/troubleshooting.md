@@ -118,6 +118,10 @@ different address.
 **step-ca resolves through the lab's CoreDNS.** `--resolver 127.0.0.1:1053`
 makes it find names in the zone that no public resolver knows.
 
+**Upstream resolvers of its own.** CoreDNS forwards names outside the zone
+to `UPSTREAM_DNS`, not to what the host's `/etc/resolv.conf` names, so the
+lab resolves the same on every host.
+
 **Containers without the host's proxy.** `--http-proxy=false` keeps a
 corporate `HTTPS_PROXY` out of the lab's containers. Their traffic is all
 local, and a proxy would carry it away.

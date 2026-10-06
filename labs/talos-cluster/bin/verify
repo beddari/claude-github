@@ -33,8 +33,7 @@ function serves()
 }
 
 #
-# Prints the names, issuer and expiry of the certificate a name serves. An
-# ACME certificate has its names only there; its subject is empty.
+# Prints the names, issuer and expiry of the certificate a name serves.
 #
 function served_cert()
 {
@@ -44,8 +43,7 @@ function served_cert()
 }
 
 #
-# Tells whether a pod on a node resolves ca.<zone> through kube-dns. Run on
-# every node, it covers the pod that shares its node with CoreDNS.
+# Tells whether a pod on a node resolves ca.<zone> through kube-dns.
 #
 function resolves_on()
 {
@@ -90,7 +88,7 @@ kubectl -n whoami wait certificate/whoami-tls --for=condition=Ready \
 retry 60 resolves "whoami.$zone" ||
 	fail "whoami.$zone does not resolve to $worker_ip!"
 log "whoami.$zone -> $worker_ip, published by external-dns"
-# Traefik loads a new secret a few seconds after the Certificate is Ready.
+# Traefik serves a new Secret seconds late: labs/docs/troubleshooting.md.
 retry 30 serves "whoami.$zone" ||
 	fail "whoami.$zone serves no certificate the lab's root trusts!"
 served_cert "whoami.$zone"

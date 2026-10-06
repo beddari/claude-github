@@ -2,8 +2,8 @@ package audit
 
 import "strings"
 
-// Frontmatter is a deliberately small YAML subset parser: top-level and
-// one-level nested scalars, block scalars (| and >) and simple lists.
+// Frontmatter is a parser for a small YAML subset: top-level and one-level
+// nested scalars, block scalars (| and >) and simple lists.
 // Nested keys are flattened as "parent.child".
 type Frontmatter struct {
 	Present   bool

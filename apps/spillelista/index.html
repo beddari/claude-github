@@ -338,12 +338,11 @@
 // The page name key matches spotify.clients.<key>
 // ─────────────────────────────────────────────
 const PAGE_NAME = 'spillelista';
-// The app can live at any sub-path (e.g. /claude-github/apps/spillelista/).
-// Everything is resolved against the app's own directory, so /…/spillelista/
+// URLs resolve against the app's own directory, at any sub-path: /…/spillelista/
 // and /…/spillelista/index.html share one redirect URI and one config.json.
 const BASE_URL = new URL('./', window.location.href);
 const REDIRECT_URI = BASE_URL.href;
-// Other experiments share this origin's sessionStorage; namespace our keys.
+// sessionStorage keys are prefixed: the other wires share the origin.
 const storageKey = (k) => `${PAGE_NAME}:${k}`;
 const SCOPES = [
   'streaming',

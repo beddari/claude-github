@@ -1,6 +1,4 @@
 crds:
   enabled: true
-# bin/addons adds extraArgs: DNS-01 checks that the token is in place through
-# acme-env's CoreDNS only, --dns01-recursive-nameservers-only. Otherwise
-# cert-manager asks the zone's name servers directly, on port 53, where
-# acme-env's BIND does not listen.
+# bin/addons sets extraArgs: DNS-01 checks go through acme-env's CoreDNS
+# only. BIND does not listen on port 53: labs/acme-env/README.md.

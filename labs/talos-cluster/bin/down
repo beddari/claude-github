@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Removes the demo, so that external-dns deletes its records, then destroys
-# the cluster. Also cleans up after a cluster that was only half created.
+# Removes the demo and waits for external-dns to delete its records, then
+# destroys the cluster and its CA. Also cleans up a half-created cluster.
 #
 
 source "${0%/*}/functions.sh" || exit $?

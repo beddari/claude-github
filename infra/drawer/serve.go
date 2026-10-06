@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 )
 
-// serve is a static file server for local previews (replaces python -m http.server).
+// serve is a static file server for local previews.
 func serve(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
