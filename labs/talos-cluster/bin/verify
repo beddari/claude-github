@@ -33,12 +33,14 @@ function serves()
 }
 
 #
-# Prints the subject, issuer and expiry of the certificate a name serves.
+# Prints the names, issuer and expiry of the certificate a name serves. An
+# ACME certificate has its names only there; its subject is empty.
 #
 function served_cert()
 {
 	echo | openssl s_client -connect "$worker_ip:443" -servername "$1" \
-		2>/dev/null | openssl x509 -noout -subject -issuer -enddate
+		2>/dev/null |
+		openssl x509 -noout -ext subjectAltName -issuer -enddate
 }
 
 #
