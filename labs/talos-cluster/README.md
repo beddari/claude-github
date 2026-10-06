@@ -39,24 +39,30 @@ sudo modprobe br_netfilter
 
 ```sh
 task acme-env:up            # the DNS and CA this cluster consumes
-task talos-cluster:up       # about 5 minutes; ends with verify
+task talos-cluster:up       # about 3 minutes; ends with verify
 export KUBECONFIG=$PWD/labs/talos-cluster/.run/kubeconfig
 ```
 
 `task talos-cluster:up` creates the cluster, installs the add-ons, the
 issuer and whoami, and ends with the end-to-end test. These lines are from a
-run on a GitHub runner:
+run on a GitHub runner, where `up` took 3 minutes 10 seconds:
 
 ```
+>>> A pod on acme-lab-controlplane-1 resolves ca.lab.test
+>>> A pod on acme-lab-worker-1 resolves ca.lab.test
 certificate.cert-manager.io/whoami-tls condition met
-dns: whoami.lab.test -> 10.5.0.3 (published by external-dns)
-Hostname: whoami-848b9bdb5-4gkjq
+>>> whoami.lab.test -> 10.5.0.3, published by external-dns
+curl: (60) SSL certificate problem: self-signed certificate
+Hostname: whoami-848b9bdb5-mc4zq
 Host: whoami.lab.test
 issuer=O = Lab Internal CA, CN = Lab Internal CA Intermediate CA
-notAfter=Oct  7 12:05:33 2026 GMT
+notAfter=Oct  7 12:48:51 2026 GMT
+>>> All good: whoami.lab.test has a record from external-dns and a step-ca cert.
 ```
 
-From the Ingress to an issued certificate takes about 20 seconds.
+The `curl` error is Traefik still serving its own certificate; `verify`
+retries until it serves the new one, here 2 seconds later. From the Ingress
+to an issued certificate takes about 20 seconds.
 
 | Task | What it does |
 |---|---|

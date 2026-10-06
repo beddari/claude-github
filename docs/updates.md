@@ -31,9 +31,24 @@ Two workflows run on every pull request:
 | Workflow | Runs | Takes |
 |---|---|---|
 | `ci` | `task lint` and `task ci`: shellcheck, the drawer's index, the docs' links, every project's `ci` | about 2 minutes |
-| `labs` | `task acme-env:up` and `check`, then `task talos-cluster:up` with `verify`; only when `labs/` changes | about 5 minutes |
+| `labs` | `task acme-env:up` and `check`, then `task talos-cluster:up` with `verify`; only when the change needs it, see below | about 6 minutes |
 
-Merge when both are green. A version of a lab image or chart is tested end
+Merge when both are green. `labs` runs its job `e2e` when the change touches
+anything under `labs/` but the docs, its workflow, or `bin/labs-changed`,
+which decides it. A change to the labs' READMEs or `labs/docs/` skips `e2e`,
+and GitHub counts a skipped job as passed. To see what a branch would do:
+
+```sh
+task labs-changed               # true or false, against origin/main
+```
+
+Neither workflow runs again on `main` after a merge: it would test the
+same files. That holds when the pull request was tested on the newest
+`main`. A ruleset makes sure of it: in the repository's settings, under
+Rules, add to the ruleset for `main` "Require status checks to pass", with
+"Require branches to be up to date before merging" and the checks `ci` and
+`e2e`. Until then, a pull request merged after another can reach `main`
+untested together with it. A version of a lab image or chart is tested end
 to end by `labs`, on a fresh Talos cluster, before it can be merged.
 
 ## What a version does not pin

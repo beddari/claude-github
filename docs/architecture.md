@@ -75,7 +75,7 @@ Go tools keep their logic in Go and their build output in their own `bin/`.
 | Workflow | On | Does |
 |---|---|---|
 | `ci` | every push to `main` and every pull request | `task lint`, then `task ci`: the drawer's index, the docs' links, every project's `ci` |
-| `labs` | pull requests and pushes that change `labs/` | acme-env and talos-cluster, end to end, on a fresh runner |
+| `labs` | pull requests that change the labs, but not their docs, as `bin/labs-changed` decides | acme-env and talos-cluster, end to end, on a fresh runner |
 | `pages` | every push to `main` | `task index-check site`, then deploys `_site/` to GitHub Pages |
 
 ## Cloud sessions

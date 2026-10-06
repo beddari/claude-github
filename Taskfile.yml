@@ -26,6 +26,12 @@ tasks:
     cmds:
       - bin/lint
 
+  labs-changed:
+    desc: Say whether the changes since a commit, origin/main by default, need the labs run end to end
+    silent: true
+    cmds:
+      - bin/labs-changed {{.CLI_ARGS}}
+
   index-check:
     desc: Check that wires.json lists every project under apps/, tools/ and labs/
     cmds:
