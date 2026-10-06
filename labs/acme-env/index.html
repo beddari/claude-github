@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>acme-env</title>
+  <meta name="description" content="Split DNS and an internal ACME CA for local clusters, in podman: CoreDNS, etcd, step-ca and BIND." />
+  <link rel="stylesheet" href="../../assets/wire.css" />
+</head>
+<body>
+  <main>
+    <a class="back" href="../../">← Back to the drawer</a>
+    <span class="wire" aria-hidden="true"></span>
+    <h1>acme-env</h1>
+    <p class="lede">
+      Split DNS and an internal certificate authority for local clusters,
+      as four containers in podman. A zone, <code>lab.test</code>, that
+      anything can publish names in, and an ACME CA that issues
+      certificates for them: per name over HTTP-01, the wildcard over
+      DNS-01, and a CA of its own for each cluster.
+    </p>
+
+    <h2>Why</h2>
+    <p>
+      A cluster on a laptop needs names that resolve and certificates that
+      verify, without a public domain or a public CA. acme-env gives it
+      both through the same protocols it would use in production:
+      external-dns writes records, cert-manager speaks ACME. Names outside
+      the zone resolve as before, and nothing goes in
+      <code>/etc/hosts</code>.
+    </p>
+
+    <h2>What you get</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>service</th><th>port</th><th>what it does</th></tr></thead>
+        <tbody>
+          <tr><td>CoreDNS</td><td>1053</td><td>Answers for <code>lab.test</code> from etcd, and forwards every other name</td></tr>
+          <tr><td>etcd</td><td>23790</td><td>Holds the records; external-dns and <code>task acme-env:record-add</code> write them</td></tr>
+          <tr><td>step-ca</td><td>8443</td><td>The ACME CA, "Lab Internal CA": 24-hour certificates under a root you trust once</td></tr>
+          <tr><td>BIND</td><td>1054</td><td>Takes DNS-01 tokens as RFC 2136 updates signed with the TSIG key <code>lab-dns01</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      All four use the host network, on the address of your default route
+      or <code>HOST_IP</code>. <code>task acme-env:cluster-ca</code> signs a
+      CA for a cluster with the root, as
+      <a href="../talos-cluster/">talos-cluster</a> does for its Kubernetes CA.
+    </p>
+
+    <h2>What the test prints</h2>
+    <p>
+      <code>task acme-env:check</code> gets two certificates with lego and
+      verifies each against the root; both together took 5.4 seconds on a
+      Linux host:
+    </p>
+<pre><span class="d">$ task acme-env:check</span>
+<span class="p">&gt;&gt;&gt;</span> Getting a certificate for smoke.lab.test over HTTP-01 ...
+INFO  The server validated our request. domain=smoke.lab.test
+X.509v3 TLS Certificate (ECDSA P-256) [Serial: 5877...0252]
+  Subject:     smoke.lab.test
+  Issuer:      Lab Internal CA Intermediate CA
+<span class="p">&gt;&gt;&gt;</span> Getting a certificate for *.lab.test over DNS-01 ...
+INFO  The server validated our request. domain=*.lab.test
+X.509v3 TLS Certificate (ECDSA P-256) [Serial: 1851...5765]
+  Subject:     *.lab.test
+  Issuer:      Lab Internal CA Intermediate CA
+<span class="p">&gt;&gt;&gt; All good:</span> step-ca issued smoke.lab.test over HTTP-01, *.lab.test over DNS-01.</pre>
+
+    <h2>Plug it in</h2>
+    <p>
+      You need podman, <a href="https://taskfile.dev">Task</a> and
+      <code>dig</code>; <code>brew bundle</code> installs them from the
+      repository's Brewfile, on macOS and Linux.
+    </p>
+<pre>git clone https://github.com/beddari/claude-github &amp;&amp; cd claude-github
+brew bundle
+task acme-env:up        <span class="d"># about 5 seconds</span>
+task acme-env:check     <span class="d"># binds port 80: rootful podman, PODMAN="sudo podman"</span>
+task acme-env:trust     <span class="d"># trust the root on this computer</span></pre>
+
+    <h2>Use it</h2>
+<pre><span class="d"># a name in the zone</span>
+task acme-env:record-add -- myapp 192.0.2.2
+task acme-env:dig -- myapp
+
+<span class="d"># any ACME client: the directory, and the root to trust</span>
+https://192.0.2.2:8443/acme/acme/directory
+labs/acme-env/.run/root_ca.crt
+
+<span class="d"># a CA for a cluster, signed by the root</span>
+task acme-env:cluster-ca -- mycluster /path/to/dir</pre>
+    <p class="note">
+      Use your host address in place of <code>192.0.2.2</code>. Not tested:
+      macOS, where podman runs in a VM, and rootless podman for the
+      HTTP-01 test.
+    </p>
+
+    <p>
+      <a href="https://github.com/beddari/claude-github/tree/main/labs/acme-env">Source and README on GitHub →</a><br />
+      <a href="https://github.com/beddari/claude-github/blob/main/labs/docs/architecture.md">Architecture of both labs →</a>
+    </p>
+  </main>
+</body>
+</html>

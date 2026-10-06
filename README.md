@@ -8,7 +8,7 @@ landing page with one wire per experiment, published on GitHub Pages.
 
 | Wire | Kind | What it does |
 |---|---|---|
-| [spillelista](apps/spillelista) | app | Spotify playlist page: log in, pick a list, play |
+| [spillelista](apps/spillelista) | app | A guessing game on your own Spotify playlist: listen, guess the year |
 | [skill-audit](tools/skill-audit) | tool | Checks Claude skills against current guidance and writes the prompt to fix them |
 | [acme-env](labs/acme-env) | lab | Split DNS and an internal ACME CA in podman: CoreDNS, etcd, step-ca and BIND for wildcards |
 | [talos-cluster](labs/talos-cluster) | lab | Talos Kubernetes in Docker that gets DNS records, certificates, a wildcard and its own CA from acme-env |
@@ -16,8 +16,10 @@ landing page with one wire per experiment, published on GitHub Pages.
 On GitHub Pages, from every push to `main`:
 
 - the landing page, drawn from `wires.json`;
-- each app, as it is;
-- each tool's page, with binaries for Linux, macOS and Windows.
+- every wire's page, its "Plug it in" link: what it is, what it prints, how
+  to run it;
+- each app, as it is, and each Go tool's binaries for Linux, macOS and
+  Windows.
 
 ## Run it
 
@@ -57,7 +59,7 @@ docs OK (14 markdown files, all relative links resolve)
 | `task site` | Build the GitHub Pages site into `_site/` |
 | `task site-serve` | Build `_site/` and serve it |
 | `task new-go -- NAME "BLURB"` | Make a Go tool at `tools/NAME` and register it everywhere |
-| `task wire-add -- NAME PATH KIND "BLURB"` | Add a project to the drawer |
+| `task wire-add -- NAME PATH KIND "BLURB" [HREF]` | Add a project to the drawer; its page is `HREF`, by default `PATH/` |
 | `task clean` | Remove `_site/` and every project's build output |
 
 A project's tasks run from the root with its name in front:
@@ -65,9 +67,9 @@ A project's tasks run from the root with its name in front:
 
 ## Add a wire
 
-A Go tool, in one step. It copies `templates/go-cli`, adds the module to
-`go.work`, the project to `wires.json` and to the root `Taskfile.yml`, and
-runs its `ci`:
+A Go tool, in one step. It copies `templates/go-cli`, a starter page
+included, adds the module to `go.work`, the project to `wires.json` and to
+the root `Taskfile.yml`, and runs its `ci`:
 
 ```sh
 task new-go -- hello "Says hello"
@@ -79,17 +81,21 @@ Anything else: make `apps/NAME/`, `tools/NAME/` or `labs/NAME/` with a
 
 ```sh
 task wire-add -- NAME labs/NAME lab "What it does"
+task wire-add -- NAME apps/NAME app "What it does" apps/NAME/plug/
 ```
 
-and add it to `includes:` at the end of the root `Taskfile.yml`. `task ci`
-fails until both are done. An app gets an `href` and is published; for a tool
-page, give the entry `"href": "tools/NAME/"` and the tool an `index.html`.
+and add it to `includes:` at the end of the root `Taskfile.yml`. Every wire
+has a page: `index.html` in the folder its `href` names, `PATH/` unless
+given, in the shape of [the skill-audit page](tools/skill-audit/index.html)
+and styled by `assets/wire.css`. An app's own `index.html` is the app, so
+its page goes in a subfolder, as in the second line. `task ci` fails until
+all three are done.
 
 ## How it is built
 
 ```
 index.html, wires.json   the landing page and the index it draws
-assets/                  the landing page's background photo
+assets/                  the background photo, and wire.css for every wire's page
 apps/ tools/ labs/       the wires, each with a Taskfile.yml and a README
 infra/drawer/            Go: checks wires.json and the docs, builds the site, serves it
 templates/go-cli/        what task new-go copies

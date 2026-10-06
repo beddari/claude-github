@@ -51,11 +51,12 @@ GitHub makes them from headings.
 main.go         the command line
 wires.go        wires.json: load, check, add; drawer json
 docs.go         the link check
-site.go         the site: copies apps, tool pages, builds tool binaries
+site.go         the site: copies apps and pages, builds tool binaries
 serve.go        the file server
 main_test.go    the tests, on a made-up repository in a temporary folder
 ```
 
 `drawer site` builds a Go tool for Linux on amd64 and arm64, macOS on arm64
 and amd64, and Windows on amd64, and writes `SHA256SUMS` beside them. It
-publishes a tool's `index.html` and binaries, never its source.
+publishes a tool's page and binaries, never its source. `drawer check`
+fails for a wire without a page.

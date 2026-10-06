@@ -38,7 +38,7 @@ flowchart LR
 | Folder | Holds | Example |
 |---|---|---|
 | `apps/` | Static web apps, published as they are | spillelista |
-| `tools/` | Go command-line tools; a page with downloads when they have an `index.html` | skill-audit |
+| `tools/` | Go command-line tools; their page has downloads | skill-audit |
 | `labs/` | Environments that run containers or clusters | acme-env, talos-cluster |
 | `infra/` | The repository's own plumbing; not in the drawer | drawer |
 | `templates/` | What `task new-go` copies | go-cli |
@@ -49,17 +49,19 @@ root `Taskfile.yml`, so its tasks run from the root as `project:task`.
 ## The drawer
 
 `wires.json` lists every project under `apps/`, `tools/` and `labs/`, with
-its kind, a one-line blurb and, for a published page, an `href`. Three
-things read it:
+its kind, a one-line blurb and the `href` of its page. Three things read
+it:
 
 | Reader | What it does |
 |---|---|
-| `index.html` | The landing page fetches it and draws one wire per project |
-| `drawer check` | Fails when a project is missing from it, or an entry is wrong |
-| `drawer site` | Builds `_site/`: the landing page, every app, and every tool page with its binaries |
+| `index.html` | The landing page fetches it and draws one wire per project, linked to its page |
+| `drawer check` | Fails when a project is missing from it, an entry is wrong, or a page is missing |
+| `drawer site` | Builds `_site/`: the landing page, every page, every app, and every Go tool's binaries |
 
-`drawer site` copies each app's folder whole, and from a tool only its
-`index.html`. For a Go tool it builds binaries for Linux, macOS and Windows,
+`drawer site` copies each app's folder whole, and from a tool or a lab only
+the `index.html` of its page. Every page is in the shape of
+`tools/skill-audit/index.html`, styled by `assets/wire.css`: what the wire
+is, why, what you get, real output, how to plug it in and use it. For a Go tool it builds binaries for Linux, macOS and Windows,
 with a `SHA256SUMS`, into the page's `dl/`. Source files are not published.
 
 ## Tasks and scripts

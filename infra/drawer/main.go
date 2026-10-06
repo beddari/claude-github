@@ -15,8 +15,8 @@ import (
 const usage = `drawer — keep the wire drawer in order
 
 Usage:
-  drawer [-root DIR] check                           every apps/*, tools/* and labs/* project is in wires.json, and every entry is valid
-  drawer [-root DIR] add NAME PATH KIND [BLURB]      append a wire (KIND: app | tool | lab)
+  drawer [-root DIR] check                           every apps/*, tools/* and labs/* project is in wires.json, valid, with a page
+  drawer [-root DIR] add NAME PATH KIND [BLURB [HREF]] append a wire (KIND: app | tool | lab; HREF: its page, default PATH/)
   drawer [-root DIR] site [OUT]                      build the Pages site into OUT (default _site)
   drawer serve [-port 8000] [DIR]                    serve DIR (default .) at http://127.0.0.1:PORT/
   drawer json FILE KEY.PATH                          print a JSON string value; fail if missing or empty
@@ -85,13 +85,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 			}
 			fmt.Fprintf(stdout, "wires.json OK (%d wires)\n", n)
 		}
-	case cmd == "add" && (len(args) == 3 || len(args) == 4):
-		blurb := "TODO: describe this wire."
-		if len(args) == 4 {
+	case cmd == "add" && len(args) >= 3 && len(args) <= 5:
+		blurb, href := "TODO: describe this wire.", ""
+		if len(args) >= 4 {
 			blurb = args[3]
 		}
+		if len(args) == 5 {
+			href = args[4]
+		}
 		var added bool
-		if added, err = add(r, Wire{Name: args[0], Path: args[1], Kind: args[2], Blurb: blurb}); err == nil {
+		if added, err = add(r, Wire{Name: args[0], Path: args[1], Kind: args[2], Blurb: blurb, Href: href}); err == nil {
 			if added {
 				fmt.Fprintf(stdout, "added %s to wires.json\n", args[1])
 			} else {

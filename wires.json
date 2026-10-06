@@ -5,8 +5,8 @@
       "name": "spillelista",
       "path": "apps/spillelista",
       "kind": "app",
-      "blurb": "Spotify playlist page. Log in, pick a list, play.",
-      "href": "apps/spillelista/"
+      "blurb": "A guessing game on your own Spotify playlist: listen, guess the year, flip the card.",
+      "href": "apps/spillelista/plug/"
     },
     {
       "name": "skill-audit",
@@ -19,13 +19,15 @@
       "name": "acme-env",
       "path": "labs/acme-env",
       "kind": "lab",
-      "blurb": "Split DNS and an internal ACME CA in podman: CoreDNS, etcd, step-ca and BIND, for certificates over HTTP-01 and wildcards over DNS-01, and a CA per cluster signed by its root."
+      "blurb": "Split DNS and an internal ACME CA in podman: CoreDNS, etcd, step-ca and BIND, for certificates over HTTP-01 and wildcards over DNS-01, and a CA per cluster signed by its root.",
+      "href": "labs/acme-env/"
     },
     {
       "name": "talos-cluster",
       "path": "labs/talos-cluster",
       "kind": "lab",
-      "blurb": "Talos Kubernetes in Docker that consumes acme-env: external-dns publishes into its DNS, cert-manager gets certificates and a wildcard from its CA, and its root signs the cluster's own CA."
+      "blurb": "Talos Kubernetes in Docker that consumes acme-env: external-dns publishes into its DNS, cert-manager gets certificates and a wildcard from its CA, and its root signs the cluster's own CA.",
+      "href": "labs/talos-cluster/"
     }
   ]
 }

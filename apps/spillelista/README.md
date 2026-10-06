@@ -1,8 +1,9 @@
 # Spillelista
 
-A one-page Spotify player: log in with Spotify, pick one of your playlists,
-and play it in the browser. One `index.html` and a `config.json`, with no
-build step.
+A guessing game on one of your own Spotify playlists: log in with Spotify,
+paste a playlist link, and guess the year of each song before you flip the
+card. One `index.html` and a `config.json`, with no build step. Its page,
+with how to plug it in, is [plug/index.html](plug/index.html).
 
 ## What you get
 
@@ -46,6 +47,7 @@ safe in the repository.
 
 ```
 index.html      the whole app: markup, style and script
+plug/           the wire's page in the drawer
 config.json     the Spotify client ID, read at start
 Taskfile.yml    the tasks
 ```
