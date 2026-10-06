@@ -1,0 +1,102 @@
+# Monorepo entry point — https://taskfile.dev
+# `task --list` shows root tasks plus every project's tasks as <project>:<task>.
+# Everything here runs on Go + Task; repo plumbing lives in infra/drawer.
+version: '3'
+
+vars:
+  DRAWER: go run ./infra/drawer
+  PORT: '{{.PORT | default "8000"}}'
+
+tasks:
+  default:
+    desc: List all tasks
+    silent: true
+    cmds:
+      - '{{.TASK_EXE}} --list'
+
+  serve:
+    desc: Serve the repo as-is (drawer + apps) at http://127.0.0.1:PORT/
+    cmds:
+      - '{{.DRAWER}} serve -port {{.PORT}} .'
+
+  site:
+    desc: Build the GitHub Pages site into _site/ (what the pages workflow publishes)
+    cmds:
+      - '{{.DRAWER}} site'
+
+  site:serve:
+    desc: Build _site/ and preview it at http://127.0.0.1:PORT/
+    deps: [site]
+    cmds:
+      - '{{.DRAWER}} serve -port {{.PORT}} _site'
+
+  index:check:
+    desc: Check wires.json lists every project under apps/ and tools/ (the drawer's index)
+    cmds:
+      - '{{.DRAWER}} check'
+
+  wire:add:
+    desc: 'Add a project to the drawer: task wire:add NAME=x PATH=apps/x KIND=app BLURB="what it does"'
+    requires:
+      vars: [NAME, PATH, KIND, BLURB]
+    cmds:
+      - '{{.DRAWER}} add "{{.NAME}}" "{{.PATH}}" "{{.KIND}}" "{{.BLURB}}"'
+
+  ci:
+    desc: Check the drawer index, then run `ci` in every project under infra/, apps/ and tools/
+    cmds:
+      - task: index:check
+      - |
+        set -e
+        for d in infra/*/ apps/*/ tools/*/; do
+          [ -f "$d/Taskfile.yml" ] || continue
+          echo "==> $d"
+          '{{.TASK_EXE}}' -d "$d" ci
+        done
+
+  clean:
+    desc: Remove _site/ and run `clean` in every project that defines it
+    cmds:
+      - rm -rf _site
+      - |
+        for d in apps/*/ tools/*/; do
+          [ -f "$d/Taskfile.yml" ] && '{{.TASK_EXE}}' -d "$d" clean 2>/dev/null || true
+        done
+
+  new:go:
+    desc: 'Scaffold a Go CLI at tools/NAME from templates/go-cli (task new:go NAME=my-tool BLURB="what it does")'
+    requires:
+      vars: [NAME]
+    preconditions:
+      - sh: echo '{{.NAME}}' | grep -Eq '^[a-z][a-z0-9-]*$'
+        msg: NAME must be lowercase letters, digits and hyphens
+      - sh: '[ ! -e tools/{{.NAME}} ]'
+        msg: tools/{{.NAME}} already exists
+    cmds:
+      - mkdir -p tools/{{.NAME}}
+      - |
+        for f in templates/go-cli/*.tmpl; do
+          b=$(basename "$f" .tmpl)
+          [ "$b" = gitignore ] && b=.gitignore
+          sed 's/__NAME__/{{.NAME}}/g' "$f" > "tools/{{.NAME}}/$b"
+        done
+      - go work use ./tools/{{.NAME}}
+      - |
+        {{.DRAWER}} add '{{.NAME}}' 'tools/{{.NAME}}' tool '{{.BLURB | default "TODO describe this wire"}}'
+      # Register the project's tasks as {{.NAME}}:<task>; relies on `includes:` being the last key in this file.
+      - |
+        printf '  %s:\n    taskfile: tools/%s/Taskfile.yml\n    dir: tools/%s\n' '{{.NAME}}' '{{.NAME}}' '{{.NAME}}' >> Taskfile.yml
+      - '{{.TASK_EXE}} -d tools/{{.NAME}} ci'
+      - 'echo "created tools/{{.NAME}} — try: task {{.NAME}}:run"'
+
+# Keep `includes:` last: `task new:go` appends new projects to the end of this file.
+includes:
+  drawer:
+    taskfile: infra/drawer/Taskfile.yml
+    dir: infra/drawer
+  spillelista:
+    taskfile: apps/spillelista/Taskfile.yml
+    dir: apps/spillelista
+  skill-audit:
+    taskfile: tools/skill-audit/Taskfile.yml
+    dir: tools/skill-audit

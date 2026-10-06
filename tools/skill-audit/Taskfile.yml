@@ -1,0 +1,120 @@
+# https://taskfile.dev — run `task --list` to see everything.
+version: '3'
+
+vars:
+  # Override on the command line: task audit SKILLS="~/.claude/skills ./my-plugin/skills"
+  SKILLS: '{{.SKILLS | default ""}}'
+  PROMPTS: '{{.PROMPTS | default "prompts"}}'
+
+tasks:
+  default:
+    desc: Format, vet, test and build, then audit your skills
+    cmds:
+      - task: ci
+      - task: audit
+
+  fmt:
+    desc: gofmt all sources
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: go vet and a gofmt check
+    cmds:
+      - go vet ./...
+      - 'test -z "$(gofmt -l .)" || (gofmt -l . && echo "unformatted files; run task fmt" && exit 1)'
+
+  test:
+    desc: Run unit and CLI tests
+    cmds:
+      - go test -race -count=1 ./...
+
+  build:
+    desc: Build the binary into bin/
+    sources: ['**/*.go', go.mod]
+    generates: [bin/skill-audit]
+    cmds:
+      - go build -trimpath -ldflags="-s -w" -o {{.TASKFILE_DIR}}/bin/skill-audit .
+
+  install:
+    desc: go install skill-audit onto your PATH ($GOBIN or ~/go/bin)
+    cmds:
+      - go install -trimpath .
+
+  ci:
+    desc: Everything CI should run (vet, test, build, self-check against fixtures)
+    cmds:
+      - task: vet
+      - task: test
+      - task: build
+      - task: verify
+
+  verify:
+    desc: Prove the binary works end-to-end on the bundled good/bad fixtures
+    deps: [build]
+    cmds:
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -strict -strict-warn internal/audit/testdata/good-skill > /dev/null'
+      - '! {{.TASKFILE_DIR}}/bin/skill-audit -strict internal/audit/testdata/bad-skill > /dev/null'
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -format json internal/audit/testdata | grep -q ''"status": "fail"'''
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -prompt internal/audit/testdata | grep -q "before changing anything"'
+      - echo "verify OK"
+
+  audit:
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Audit skills (default ~/.claude/skills and ./.claude/skills; set SKILLS=... to override)
+    deps: [build]
+    cmds:
+      - '{{.TASKFILE_DIR}}/bin/skill-audit {{.CLI_ARGS}} {{.SKILLS}}'
+
+  audit:md:
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Write a markdown audit report to skill-audit.md
+    deps: [build]
+    cmds:
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -format markdown {{.SKILLS}} > skill-audit.md'
+      - echo "wrote skill-audit.md"
+
+  audit:json:
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Print the audit as JSON
+    deps: [build]
+    cmds:
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -format json {{.SKILLS}}'
+
+  prompt:
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Print one Claude prompt that fixes every skill needing work
+    deps: [build]
+    cmds:
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -prompt {{.CLI_ARGS}} {{.SKILLS}}'
+
+  prompts:
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Write one <skill>.prompt.md per skill needing work into PROMPTS (default ./prompts)
+    deps: [build]
+    cmds:
+      - mkdir -p {{.PROMPTS}}
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -prompt -prompt-dir {{.PROMPTS}} {{.SKILLS}} > {{.PROMPTS}}/ALL.prompt.md'
+      - ls -1 {{.PROMPTS}}
+
+  fix:
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Start an interactive Claude Code session seeded with the fix prompt (needs the `claude` CLI)
+    deps: [build]
+    preconditions:
+      - sh: command -v claude
+        msg: "claude CLI not found — run `task prompt` and paste the output instead"
+    cmds:
+      - 'claude "$({{.TASKFILE_DIR}}/bin/skill-audit -prompt {{.SKILLS}})"'
+    interactive: true
+
+  checks:
+    desc: List every check and the rule it enforces
+    deps: [build]
+    cmds:
+      - '{{.TASKFILE_DIR}}/bin/skill-audit -list-checks'
+
+  clean:
+    desc: Remove build output
+    cmds:
+      - rm -rf bin .task

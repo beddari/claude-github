@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  vet:
+    desc: go vet and a gofmt check
+    cmds:
+      - go vet ./...
+      - 'test -z "$(gofmt -l .)" || (gofmt -l . && echo "unformatted files; run gofmt -w ." && exit 1)'
+
+  test:
+    desc: Run tests (includes real cross-compiles)
+    cmds:
+      - go test -race -count=1 ./...
+
+  ci:
+    desc: vet + test
+    cmds:
+      - task: vet
+      - task: test

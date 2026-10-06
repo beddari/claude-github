@@ -1,0 +1,7 @@
+# Build output and task caches, anywhere in the tree
+bin/
+.task/
+# Reports written by `task skill-audit:*` when run from the repo root
+/prompts/
+/skill-audit.md
+/_site/
