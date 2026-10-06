@@ -13,7 +13,7 @@ function init_ca()
 {
 	local state
 
-	# Only "missing" creates a CA; any other answer keeps the volume as it is.
+	# Only "missing" creates a CA; any other answer leaves the volume alone.
 	state="$(in_ca sh -c \
 		'[ -f /home/step/config/ca.json ] && echo ok || echo missing')"
 	case "$state" in

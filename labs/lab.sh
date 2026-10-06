@@ -16,7 +16,8 @@ ca_port="$CA_PORT"
 etcd_port="$ETCD_PORT"
 etcd_peer_port="$ETCD_PEER_PORT"
 dns_update_port="$DNS_UPDATE_PORT"
-# Name of the TSIG key for DNS-01 updates. Its secret: acme-env/.run/tsig.secret.
+# Name of the TSIG key for DNS-01 updates; its secret is in
+# labs/acme-env/.run/tsig.secret.
 tsig_name="lab-dns01"
 upstream_dns="$UPSTREAM_DNS"
 
@@ -80,7 +81,7 @@ function lab_host_ip()
 		read -r first _ <<< "$(hostname -I)"
 		echo "$first"
 	else
-		# macOS; podman there runs in a VM: labs/docs/troubleshooting.md.
+		# macOS, podman in a VM: labs/docs/troubleshooting.md.
 		ipconfig getifaddr en0
 	fi
 }
