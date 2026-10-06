@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 #
-# Creates the ClusterIssuer step-ca and waits for it to be Ready.
+# Creates the ClusterIssuer step-ca, with the TSIG secret its DNS-01 solver
+# signs updates with, and waits for it to be Ready.
 #
 
 source "${0%/*}/functions.sh" || exit $?
 
+[[ -s "$tsig_file" ]] || fail "No $tsig_file: task acme-env:up"
+
 "$root/bin/render" || exit $?
+kubectl -n cert-manager create secret generic lab-dns01-tsig \
+	--from-literal=secret="$(< "$tsig_file")" --dry-run=client -o yaml |
+	kubectl apply -f - >/dev/null || fail "Creating the TSIG secret failed!"
 kubectl apply -f "$run_dir/cluster-issuer.yaml" ||
 	fail "Creating the ClusterIssuer failed!"
 kubectl wait clusterissuer/step-ca --for=condition=Ready --timeout=120s ||

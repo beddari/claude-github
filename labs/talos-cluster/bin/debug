@@ -45,15 +45,19 @@ for ns in traefik external-dns cert-manager whoami; do
 done
 kubectl get ingress,certificate,certificaterequest,order,challenge -A \
 	2>/dev/null
+kubectl describe challenge -A 2>/dev/null |
+	grep -E '^(Name:|  Reason|  State)|Warning'
 
 section "Cluster CoreDNS"
 kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}'
 kubectl -n kube-system logs -l k8s-app=kube-dns --tail=20 --prefix
 
-section "acme-env's DNS from the cluster's network: UDP, then TCP"
+section "acme-env's DNS from the cluster's network: UDP, TCP, BIND"
 "$docker" run --rm --network "$cluster" docker.io/library/alpine:3 sh -c "
 	apk add -q bind-tools >/dev/null
 	dig @$host_ip -p $dns_port +time=3 +tries=1 +short ca.$zone
-	dig @$host_ip -p $dns_port +tcp +time=3 +tries=1 +short ca.$zone"
+	dig @$host_ip -p $dns_port +tcp +time=3 +tries=1 +short ca.$zone
+	dig @$host_ip -p $dns_update_port +time=3 +tries=1 +short \
+		SOA _acme-challenge.$zone"
 
 exit 0

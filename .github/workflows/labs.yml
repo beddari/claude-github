@@ -56,6 +56,7 @@ jobs:
         run: |
           task acme-env:status || true
           sudo podman logs acme-env-ca 2>&1 | tail -50 || true
+          sudo podman logs acme-env-bind 2>&1 | tail -30 || true
           task acme-env:records || true
           task talos-cluster:debug || true
       - name: Tear down

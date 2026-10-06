@@ -1,31 +1,44 @@
 #!/usr/bin/env bash
 #
-# The end-to-end test: a pod on every node resolves ca.<zone>, the
-# certificate is Ready, whoami.<zone> resolves to the worker through
-# acme-env's DNS, and HTTPS from this computer verifies against the root.
+# The end-to-end test:
+#
+# - the API server's certificate chains to acme-env's root, through the
+#   cluster's CA;
+# - a pod on every node resolves ca.<zone>;
+# - whoami.<zone> has a certificate over HTTP-01 and a record from
+#   external-dns, and serves HTTPS that the root trusts;
+# - *.<zone> has a certificate over DNS-01, which hello.<zone> serves.
 #
 
 source "${0%/*}/functions.sh" || exit $?
 
-fqdn="whoami.$zone"
-
 #
-# Tells whether the name resolves to the worker through acme-env.
+# Tells whether a name resolves to the worker through acme-env.
 #
 function resolves()
 {
-	[[ "$(dig @"$host_ip" -p "$dns_port" +short "$fqdn" | tail -1)" == \
+	[[ "$(dig @"$host_ip" -p "$dns_port" +short "$1" | tail -1)" == \
 		"$worker_ip" ]]
 }
 
 #
-# Tells whether HTTPS answers with a certificate the lab's root trusts.
+# Tells whether a name serves HTTPS with a certificate the lab's root
+# trusts.
 #
 function serves()
 {
 	curl -fsS --noproxy '*' --cacert "$root_ca" \
-		--resolve "$fqdn:443:$worker_ip" "https://$fqdn/" |
+		--resolve "$1:443:$worker_ip" "https://$1/" |
 		grep -E '^(Hostname|Host):'
+}
+
+#
+# Prints the subject, issuer and expiry of the certificate a name serves.
+#
+function served_cert()
+{
+	echo | openssl s_client -connect "$worker_ip:443" -servername "$1" \
+		2>/dev/null | openssl x509 -noout -subject -issuer -enddate
 }
 
 #
@@ -43,6 +56,27 @@ function resolves_on()
 		grep -q "$host_ip"
 }
 
+#
+# Verifies the API server's certificate against the root, with the
+# cluster's CA as the only intermediate.
+#
+function api_chains_to_root()
+{
+	local server
+
+	server="$(kubectl config view --raw \
+		-o jsonpath='{.clusters[0].cluster.server}')" || return $?
+	echo | openssl s_client -connect "${server#https://}" 2>/dev/null |
+		openssl x509 > "$run_dir/apiserver.crt" || return $?
+	openssl verify -CAfile "$root_ca" -untrusted "$ca_dir/ca.crt" \
+		"$run_dir/apiserver.crt" >/dev/null
+}
+
+api_chains_to_root ||
+	fail "The API server's certificate does not chain to the lab's root!"
+log "The API server's certificate chains to the lab's root:"
+openssl x509 -in "$ca_dir/ca.crt" -noout -subject -issuer
+
 for node in $(kubectl get nodes -o name); do
 	node="${node#node/}"
 	resolves_on "$node" || fail "A pod on $node cannot resolve ca.$zone!"
@@ -50,14 +84,22 @@ for node in $(kubectl get nodes -o name); do
 done
 
 kubectl -n whoami wait certificate/whoami-tls --for=condition=Ready \
-	--timeout=300s || fail "The certificate is not Ready!"
+	--timeout=300s || fail "The certificate for whoami is not Ready!"
+retry 60 resolves "whoami.$zone" ||
+	fail "whoami.$zone does not resolve to $worker_ip!"
+log "whoami.$zone -> $worker_ip, published by external-dns"
+# Traefik loads a new secret a few seconds after the Certificate is Ready.
+retry 30 serves "whoami.$zone" ||
+	fail "whoami.$zone serves no certificate the lab's root trusts!"
+served_cert "whoami.$zone"
 
-retry 60 resolves || fail "$fqdn does not resolve to $worker_ip!"
-log "$fqdn -> $worker_ip, published by external-dns"
+kubectl -n whoami wait certificate/wildcard --for=condition=Ready \
+	--timeout=300s || fail "The wildcard certificate is not Ready!"
+log "*.$zone was issued over DNS-01"
+retry 60 resolves "hello.$zone" ||
+	fail "hello.$zone does not resolve to $worker_ip!"
+retry 30 serves "hello.$zone" ||
+	fail "hello.$zone serves no certificate the lab's root trusts!"
+served_cert "hello.$zone"
 
-# Traefik loads the new secret a few seconds after the Certificate is Ready.
-retry 30 serves || fail "$fqdn serves no certificate the lab's root trusts!"
-
-echo | openssl s_client -connect "$worker_ip:443" -servername "$fqdn" \
-	2>/dev/null | openssl x509 -noout -issuer -enddate
-log "All good: $fqdn has a record from external-dns and a step-ca cert."
+log "All good: CA chain, whoami.$zone over HTTP-01, *.$zone over DNS-01."

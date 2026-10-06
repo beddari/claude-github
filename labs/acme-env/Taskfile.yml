@@ -10,7 +10,7 @@ tasks:
       - task --list
 
   up:
-    desc: Start etcd, CoreDNS and step-ca; creates the CA on the first run
+    desc: Start etcd, BIND, CoreDNS and step-ca; creates the CA on the first run
     silent: true
     cmds:
       - bin/up
@@ -22,7 +22,7 @@ tasks:
       - bin/status
 
   check:
-    desc: "Run the end-to-end test: a certificate for smoke.<zone> over HTTP-01 (binds port 80)"
+    desc: "Run the end-to-end test: smoke.<zone> over HTTP-01 (binds port 80), *.<zone> over DNS-01"
     silent: true
     cmds:
       - bin/check
@@ -44,6 +44,12 @@ tasks:
     silent: true
     cmds:
       - bin/untrust
+
+  cluster-ca:
+    desc: "Sign a CA for a cluster with the root: task acme-env:cluster-ca -- NAME DIR"
+    silent: true
+    cmds:
+      - bin/cluster-ca {{.CLI_ARGS}}
 
   record-add:
     desc: "Add an A record to the zone: task acme-env:record-add -- NAME IP"
@@ -70,7 +76,7 @@ tasks:
       - bin/dig {{.CLI_ARGS}}
 
   logs:
-    desc: "Follow a container's log: task acme-env:logs -- ca, dns or etcd"
+    desc: "Follow a container's log: task acme-env:logs -- ca, dns, bind or etcd"
     silent: true
     cmds:
       - bin/logs {{.CLI_ARGS}}

@@ -50,9 +50,13 @@ helm upgrade --install external-dns external-dns/external-dns \
 	--set "env[0].value=http://$host_ip:$etcd_port" \
 	--set "domainFilters[0]=$zone" --set "txtOwnerId=$cluster" ||
 	fail "Installing external-dns failed!"
+# See values/cert-manager.yaml.
+dns01_args="extraArgs={--dns01-recursive-nameservers-only,"
+dns01_args+="--dns01-recursive-nameservers=$host_ip:$dns_port}"
 helm upgrade --install cert-manager jetstack/cert-manager \
 	--version "$cert_manager_version" -n cert-manager --create-namespace \
-	-f "$root/values/cert-manager.yaml" ||
+	-f "$root/values/cert-manager.yaml" \
+	--set "$dns01_args" ||
 	fail "Installing cert-manager failed!"
 
 for workload in traefik/daemonset/traefik \

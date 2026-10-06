@@ -16,12 +16,14 @@ img_step_ca="docker.io/smallstep/step-ca:0.30.2"
 img_coredns="docker.io/coredns/coredns:1.14.7"
 img_etcd="quay.io/coreos/etcd:v3.7.2"
 img_lego="docker.io/goacme/lego:v5.5.2"
+img_bind="docker.io/internetsystemsconsortium/bind9:9.20"
 
 # PODMAN="sudo podman" runs everything rootful, as CI does for port 80.
 read -r -a podman <<< "${PODMAN:-podman}"
 
 host_ip="$(lab_host_ip)"
 acme_url="https://$host_ip:$ca_port/acme/acme/directory"
+tsig_file="$run_dir/tsig.secret"
 
 #
 # Runs podman, or what PODMAN names.

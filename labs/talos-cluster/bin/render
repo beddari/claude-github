@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Renders manifests/*.yaml.tmpl into .run/, with the zone, the CA port and
-# acme-env's root certificate as the issuer's CA bundle.
+# acme-env's root certificate as the issuer's CA bundle, and the address
+# and TSIG key of its DNS-01 updates.
 #
 
 source "${0%/*}/functions.sh" || exit $?
@@ -16,6 +17,8 @@ mkdir -p "$run_dir" || fail "Could not create $run_dir!"
 for tmpl in "$root"/manifests/*.yaml.tmpl; do
 	out="${tmpl##*/}"
 	sed -e "s/__ZONE__/$zone/g" -e "s/__CA_PORT__/$ca_port/g" \
+	    -e "s/__HOST_IP__/$host_ip/g" -e "s/__TSIG_NAME__/$tsig_name/g" \
+	    -e "s/__DNS_UPDATE_PORT__/$dns_update_port/g" \
 	    -e "s#__CA_BUNDLE__#$bundle#g" "$tmpl" > "$run_dir/${out%.tmpl}" ||
 		fail "Rendering ${tmpl##*/} failed!"
 done

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Creates the cluster and installs what consumes acme-env: Traefik,
-# external-dns, cert-manager, the step-ca issuer and the whoami demo. Ends
-# with the end-to-end test. Each step is also a task of its own.
+# Creates the cluster, with a CA signed by acme-env's root, and installs
+# what consumes acme-env: Traefik, external-dns, cert-manager, the step-ca
+# issuer, the whoami demo and the wildcard demo. Ends with the end-to-end
+# test. Each step is also a task of its own.
 #
 
 source "${0%/*}/functions.sh" || exit $?
@@ -13,6 +14,7 @@ need "$docker" talosctl kubectl helm jq curl dig
 curl -fsk --noproxy '*' "https://$host_ip:$ca_port/health" >/dev/null ||
 	fail "acme-env does not answer on $host_ip: task acme-env:up"
 [[ -f "$root_ca" ]] || fail "No $root_ca: task acme-env:root"
+[[ -s "$tsig_file" ]] || fail "No $tsig_file: task acme-env:up"
 
 "$root/bin/create"      || exit $?
 "$root/bin/kubeconfig"  || exit $?

@@ -1,0 +1,22 @@
+// Rendered by bin/render into .run/bind/named.conf. BIND is authoritative
+// for one zone, _acme-challenge.__ZONE__, where ACME clients put their
+// DNS-01 tokens with RFC 2136 updates. CoreDNS forwards the zone here.
+options {
+	directory "/var/lib/bind";
+	listen-on port __DNS_UPDATE_PORT__ { any; };
+	listen-on-v6 { none; };
+	recursion no;
+	allow-query { any; };
+	pid-file none;
+};
+
+key "__TSIG_NAME__" {
+	algorithm hmac-sha256;
+	secret "__TSIG_SECRET__";
+};
+
+zone "_acme-challenge.__ZONE__" {
+	type primary;
+	file "/var/lib/bind/challenge.db";
+	allow-update { key "__TSIG_NAME__"; };
+};
