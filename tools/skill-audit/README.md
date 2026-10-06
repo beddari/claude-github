@@ -1,53 +1,104 @@
 # skill-audit
 
-Audits Claude skills (`SKILL.md` folders) against Anthropic's updated
-skill-authoring best practices, and can generate a prompt asking Claude to
-make the fixes. It's a single binary with no dependencies beyond the Go
-standard library.
+Checks Claude skills, the folders with a `SKILL.md`, against Anthropic's
+current guidance on writing them, and writes the prompt that asks Claude to
+fix what it finds. One Go binary with no dependencies beyond the standard
+library, for Linux, macOS and Windows.
+
+## What you get
+
+- 11 checks, from the frontmatter to the dependencies of scripts, each with
+  pass, info, warn or fail.
+- A report as text, markdown or JSON.
+- A prompt for Claude per skill, or one for all, that asks it to confirm
+  each finding and show a plan before it changes anything.
+
+| Check | Rule |
+|---|---|
+| `frontmatter` | A valid `name`, and a third-person `description` that says when to use the skill |
+| `length` | The body of `SKILL.md` under 500 lines; a warning from 400 |
+| `contents` | A reference file over 100 lines starts with a contents list that matches its headings; Claude previews such files with `head -100` |
+| `nesting` | Every reference is linked from `SKILL.md` itself, one level deep; files nothing links to are flagged |
+| `links` | Local links resolve |
+| `freedom` | Risky steps, such as money, deletion, migrations or deploys, run an exact script, not loose prose |
+| `models` | The models the skill was tested on are in the frontmatter |
+| `emphasis` | Not many ALL-CAPS MUST, NEVER or IMPORTANT, which newer models handle worse |
+| `checklist` | An ordered workflow gives Claude a `- [ ]` checklist to copy and tick off |
+| `feedback` | A validation step loops: check, fix, repeat until it passes |
+| `deps` | Every package and command-line tool has an install line, a manifest entry or PEP 723 metadata |
+
+## Run it
+
+From the root of the repository; Go and Task are enough.
 
 ```sh
-task skill-audit:install    # from the repo root, or: go build -o bin/skill-audit . in this folder
-skill-audit           # audits ~/.claude/skills and ./.claude/skills
-skill-audit path/to/skills path/to/one-skill path/to/SKILL.md
-skill-audit -prompt > fix.md      # a Claude prompt covering every skill that needs work
+task skill-audit:install                    # go install: skill-audit on your PATH
+skill-audit                                 # audit ~/.claude/skills and ./.claude/skills
+skill-audit -prompt > fix.md                # the prompt that fixes them
 ```
 
-## Checks
+Or without installing, with the arguments after `--`:
 
-| id | rule |
+```sh
+task skill-audit:audit -- ~/.claude/skills
+task skill-audit:audit -- -format json path/to/one-skill
+```
+
+The text report ends with one line per skill. On the bundled sample skills,
+one good and one written to break every rule:
+
+```
+Summary
+  skill       pass info warn fail  needs work
+  Bad_Skill      1    0    5    5  frontmatter, contents, nesting, links, freedom, models, emphasis, checklist, feedback, deps
+  good-skill    11    0    0    0
+  TOTAL         12    0    5    5
+```
+
+On the 13 skills of a Claude Code cloud session in October 2026 it found
+that none recorded tested models, and that `pdf` had install lines for 2 of
+its 17 packages and tools. The tool's page, [index.html](index.html), has
+the whole result; GitHub Pages publishes it with binaries to download.
+
+| Task | What it does |
 |---|---|
-| `frontmatter` | Valid `name`, plus a third-person `description` that says when to use the skill |
-| `length` | SKILL.md body under 500 lines (warns from 400) |
-| `contents` | Reference files over 100 lines need a contents list in their first 100 lines that matches their headings (Claude previews them with `head -100`) |
-| `nesting` | Every reference is linked directly from SKILL.md (one level deep); flags orphans |
-| `links` | Local links resolve |
-| `freedom` | Fragile operations (money, deletion, migrations, deploys) are backed by a script or an exact command |
-| `models` | Tested/intended models are recorded in the frontmatter (e.g. `metadata.tested-models`) |
-| `emphasis` | Not over-prescriptive (heavy use of ALL-CAPS MUST/NEVER/IMPORTANT hurts newer models) |
-| `checklist` | Ordered multi-step workflows give Claude a copyable `- [ ]` checklist |
-| `feedback` | Validation steps follow a fix-and-repeat-until-it-passes loop |
-| `deps` | Every Python/Node package and CLI tool used by scripts or code examples has an install line, a manifest entry, or PEP 723 metadata |
+| `task skill-audit:audit -- [flags] [paths]` | Audit skills and print the report |
+| `task skill-audit:report -- [paths]` | Write the report as markdown to `skill-audit.md` |
+| `task skill-audit:prompt -- [paths]` | Print one prompt that fixes every skill that needs work |
+| `task skill-audit:prompts -- [paths]` | Write one `prompts/<skill>.prompt.md` per skill, and `ALL.prompt.md` |
+| `task skill-audit:fix -- [paths]` | Start Claude Code with the prompt as its first message |
+| `task skill-audit:checks` | List the checks and their rules |
+| `task skill-audit:install` | `go install` the binary into `$GOBIN` or `~/go/bin` |
+| `task skill-audit:ci` | vet, the tests, a build, and a check against the sample skills |
 
-The checks are heuristics. The generated prompt tells Claude to confirm
-or reject each finding and to show a plan before it edits anything.
-Testing on Haiku, Sonnet and Opus, and judging the right degree of
-freedom for each step, can't be automated, so the prompt lists those as
-manual review items.
+The tasks that take paths read them relative to where you run `task`.
 
-## Taskfile
+## Settings
 
-Run these from the repo root (`task --list` shows them all). Inside this
-folder, drop the `skill-audit:` prefix.
+| Flag | Default | Meaning |
+|---|---|---|
+| `-format` | `text` | `text`, `markdown` or `json` |
+| `-prompt` | off | Print the prompt for Claude in place of the report |
+| `-prompt-dir DIR` | none | Also write one prompt per skill into `DIR` |
+| `-include-info` | off | Put info-level findings in the prompts too |
+| `-only ID,ID` | all | Run only these checks |
+| `-strict` | off | Exit 1 when a check fails |
+| `-strict-warn` | off | With `-strict`, exit 2 on warnings |
+| `-head-lines` | `100` | Lines Claude previews of a reference file |
+| `-max-lines` | `500` | The limit for the body of `SKILL.md` |
+| `-v`, `-no-color`, `-list-checks` | | More detail, no colour, list the checks |
 
-- `task skill-audit:ci`: vet, tests, build, and a self-check against the bundled good/bad sample skills
-- `task skill-audit:audit SKILLS="dir1 dir2"`: audits specific folders (relative to where you run `task`); pass flags with `-- -v`
-- `task skill-audit:prompt` / `task skill-audit:prompts`: prints one combined fix prompt, or writes one `prompts/<skill>.prompt.md` per skill
-- `task skill-audit:fix`: starts `claude` with the fix prompt as the first message
-- `task skill-audit:audit:md` / `task skill-audit:audit:json`: writes the report as markdown or JSON
+## How it is built
 
-## Flags
+```
+main.go                     the command line
+internal/audit/             loading a skill, the checks, the report and the prompt
+internal/audit/testdata/    a good and a bad sample skill, for the tests
+index.html                  the tool's page on GitHub Pages
+Taskfile.yml                the tasks
+```
 
-`-format text|markdown|json`, `-prompt`, `-prompt-dir DIR`,
-`-include-info`, `-only id,id`, `-strict` (exits 1 on any fail),
-`-strict-warn` (exits 2 on warnings), `-head-lines 100`, `-max-lines 500`,
-`-v`, `-no-color`, `-list-checks`.
+The checks are patterns, so a finding can be wrong; the prompt tells Claude
+to say so and skip it. Two things the guidance asks for cannot be checked by
+a program, and the prompt lists them for a person: testing the skill on
+Haiku, Sonnet and Opus, and how much freedom each step should have.

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Container images of acme-env, pinned in its bin/functions.sh",
+      "managerFilePatterns": ["/^labs/acme-env/bin/functions\\.sh$/"],
+      "matchStrings": [
+        "img_[a-z_]+=\"(?<depName>[^:\"]+):(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "cert-manager chart of talos-cluster",
+      "managerFilePatterns": ["/^labs/talos-cluster/bin/functions\\.sh$/"],
+      "matchStrings": ["cert_manager_version=\"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "cert-manager",
+      "registryUrlTemplate": "https://charts.jetstack.io",
+      "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "external-dns chart of talos-cluster",
+      "managerFilePatterns": ["/^labs/talos-cluster/bin/functions\\.sh$/"],
+      "matchStrings": ["external_dns_version=\"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "external-dns",
+      "registryUrlTemplate": "https://kubernetes-sigs.github.io/external-dns",
+      "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "Traefik chart of talos-cluster",
+      "managerFilePatterns": ["/^labs/talos-cluster/bin/functions\\.sh$/"],
+      "matchStrings": ["traefik_version=\"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "traefik",
+      "registryUrlTemplate": "https://traefik.github.io/charts",
+      "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "Images in the talos-cluster manifest templates",
+      "managerFilePatterns": ["/^labs/talos-cluster/manifests/.+\\.yaml\\.tmpl$/"],
+      "matchStrings": [
+        "image: (?<depName>[^:\\s]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}

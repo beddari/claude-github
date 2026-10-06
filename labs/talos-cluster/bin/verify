@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# The end-to-end test: the certificate is Ready, whoami.<zone> resolves to
-# the worker through acme-env's DNS, and HTTPS from this computer verifies
-# against the lab's root.
+# The end-to-end test: a pod on every node resolves ca.<zone>, the
+# certificate is Ready, whoami.<zone> resolves to the worker through
+# acme-env's DNS, and HTTPS from this computer verifies against the root.
 #
 
 source "${0%/*}/functions.sh" || exit $?
@@ -27,6 +27,27 @@ function serves()
 		--resolve "$fqdn:443:$worker_ip" "https://$fqdn/" |
 		grep -E '^(Hostname|Host):'
 }
+
+#
+# Tells whether a pod on a node resolves ca.<zone> through kube-dns. Run on
+# every node, it covers the pod that shares its node with CoreDNS.
+#
+function resolves_on()
+{
+	local node="$1"
+
+	kubectl run "dns-probe-$node" --rm -i --quiet --restart=Never \
+		--image=docker.io/library/busybox:1.37 --overrides="{\"spec\":
+		{\"nodeName\": \"$node\", \"tolerations\": [{\"operator\":
+		\"Exists\"}]}}" -- nslookup "ca.$zone." 2>/dev/null |
+		grep -q "$host_ip"
+}
+
+for node in $(kubectl get nodes -o name); do
+	node="${node#node/}"
+	resolves_on "$node" || fail "A pod on $node cannot resolve ca.$zone!"
+	log "A pod on $node resolves ca.$zone"
+done
 
 kubectl -n whoami wait certificate/whoami-tls --for=condition=Ready \
 	--timeout=300s || fail "The certificate is not Ready!"

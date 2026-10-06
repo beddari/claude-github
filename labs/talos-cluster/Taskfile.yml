@@ -22,7 +22,7 @@ tasks:
       - bin/status
 
   verify:
-    desc: "Run the end-to-end test: certificate Ready, DNS record from external-dns, HTTPS trusted by the lab's root"
+    desc: "Run the end-to-end test: DNS from every node, certificate Ready, DNS record from external-dns, HTTPS trusted by the lab's root"
     silent: true
     cmds:
       - bin/verify
@@ -46,7 +46,7 @@ tasks:
       - bin/kubeconfig
 
   dns-forward:
-    desc: "Step of up: forward the lab zone from the cluster's CoreDNS to acme-env, over TCP"
+    desc: "Step of up: forward the lab zone from the cluster's CoreDNS to acme-env"
     silent: true
     cmds:
       - bin/dns-forward

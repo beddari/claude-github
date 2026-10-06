@@ -1,71 +1,147 @@
 # talos-cluster
 
 A small [Talos](https://www.talos.dev) Kubernetes cluster in Docker that
-consumes [`../acme-env`](../acme-env). One Ingress shows the whole chain:
+consumes [acme-env](../acme-env). One Ingress shows the whole chain:
+external-dns publishes its name in acme-env's DNS, and cert-manager gets its
+certificate from acme-env's CA.
 
-- **external-dns** (coredns provider) publishes the hostname into acme-env's
-  etcd, so acme-env's CoreDNS answers for it.
-- **cert-manager** orders a certificate from acme-env's step-ca over ACME
-  HTTP-01, solved through Traefik.
-- **Traefik** listens on the worker's ports 80 and 443 and serves the app
-  with that certificate.
+## What you get
+
+- Talos v1.14 with Kubernetes 1.37: one control plane and one worker, as
+  Docker containers on the network `acme-lab`, `10.5.0.0/24`.
+- Traefik as the ingress controller, on the worker's ports 80 and 443.
+- external-dns, which writes the names of Ingresses into acme-env's etcd.
+- cert-manager with a `ClusterIssuer` named `step-ca`, which orders
+  certificates from acme-env over ACME HTTP-01.
+- whoami, a demo app at `https://whoami.lab.test`, with a DNS record and a
+  certificate made the way any other app's would be.
+
+| Service | Address | Port | Login |
+|---|---|---|---|
+| Kubernetes API | `https://127.0.0.1`, a port Docker picks | random | `.run/kubeconfig` |
+| Talos API | `10.5.0.2` | 50000 | `.run/talosconfig` |
+| Ingress, Traefik | `10.5.0.3`, the worker | 80, 443 | none |
+| whoami | `https://whoami.lab.test` | 443 | none |
+
+## Run it
+
+You need Docker, talosctl, kubectl, helm, jq, curl and `dig`. On macOS and
+Linux, `task tools` at the root of the repository installs them from the
+Brewfile; Docker Engine comes from your distribution, or from colima on
+macOS. acme-env must be up. The two nodes take 2 CPUs and 2 GiB of memory
+each. On Linux the kernel module `br_netfilter` must be loaded, or a pod
+cannot reach a service whose pod is on its own node; `task talos-cluster:up`
+warns when it is not:
 
 ```sh
-task tools                  # once, from the repo root: brew bundle
-task acme-env:up            # the DNS + CA this cluster consumes
-task talos-cluster:up       # cluster + Traefik + external-dns + cert-manager + issuer + demo, then verify
-export KUBECONFIG=$PWD/labs/talos-cluster/.run/kubeconfig
-task talos-cluster:down     # remove the demo (cleans its DNS), destroy the cluster
+sudo modprobe br_netfilter
 ```
 
-`up` finishes with `verify`, which checks the whole chain:
+```sh
+task acme-env:up            # the DNS and CA this cluster consumes
+task talos-cluster:up       # about 5 minutes; ends with verify
+export KUBECONFIG=$PWD/labs/talos-cluster/.run/kubeconfig
+```
 
-1. `Certificate/whoami-tls` reaches Ready, issued by step-ca.
-2. `whoami.lab.test` resolves through acme-env's CoreDNS to the worker's IP,
-   as published by external-dns.
-3. `https://whoami.lab.test` answers from the host, verified against the lab
-   root CA.
+`task talos-cluster:up` creates the cluster, installs the add-ons, the
+issuer and whoami, and ends with the end-to-end test. These lines are from a
+run on a GitHub runner:
 
-## How it's wired
+```
+certificate.cert-manager.io/whoami-tls condition met
+dns: whoami.lab.test -> 10.5.0.3 (published by external-dns)
+Hostname: whoami-848b9bdb5-4gkjq
+Host: whoami.lab.test
+issuer=O = Lab Internal CA, CN = Lab Internal CA Intermediate CA
+notAfter=Oct  7 12:05:33 2026 GMT
+```
 
-| piece | setting | why |
-|---|---|---|
-| cluster | `talosctl cluster create docker`, 1 control plane + `WORKERS` (1), subnet `10.5.0.0/24` | Smallest real Talos setup; nodes are routable from the host on Linux |
-| in-cluster DNS | CoreDNS gets a `lab.test:53 { forward . HOST_IP:1053 }` block | Pods (cert-manager's self-check, the ACME client) resolve lab names and `ca.lab.test` |
-| ingress | Traefik DaemonSet with hostPorts 80/443, `ingressEndpoint.ip` = first worker | No LoadBalancer in Docker, so ingresses report the worker IP for external-dns to publish |
-| DNS | external-dns `provider: coredns`, `ETCD_URLS=http://HOST_IP:23790`, `domainFilters: [lab.test]`, txt registry owned by the cluster name | Writes records acme-env serves; `policy: sync` removes them again |
-| certificates | cert-manager with `ClusterIssuer/step-ca` (ACME, `caBundle` = lab root, HTTP-01 via the `traefik` class) | Per-name certificates from the internal CA, with no DNS-01 or wildcards |
+From the Ingress to an issued certificate takes about 20 seconds.
 
-Settings shared with acme-env (zone, ports, host IP) come from
-[`../lab.env`](../lab.env). Chart versions are pinned in the Taskfile.
-
-## Tasks
-
-| task | does |
+| Task | What it does |
 |---|---|
-| `up` | everything below in order, then `verify` |
-| `cluster:create` / `kubeconfig` | Talos in Docker; write `.run/kubeconfig` and wait for nodes |
-| `dns:forward` | add the lab zone forward to cluster CoreDNS (idempotent) |
-| `addons` / `issuer` / `demo` | Helm releases; the ClusterIssuer; whoami + Ingress |
-| `verify` / `status` | check the chain; nodes, pods, ingresses, certificates |
-| `down` | delete the demo, wait for external-dns to clean up, destroy the cluster |
-| `ci` | render manifests and parse all YAML (no cluster needed) |
+| `task talos-cluster:up` | Run every step below, then `verify` |
+| `task talos-cluster:verify` | The end-to-end test: DNS from a pod on every node, certificate Ready, DNS record, HTTPS trusted by the lab's root |
+| `task talos-cluster:status` | Show the nodes, the lab's workloads and the certificates |
+| `task talos-cluster:debug` | Print Helm, pods, events, logs and the cluster's DNS, for when `up` or `verify` fails |
+| `task talos-cluster:down` | Remove whoami and its DNS records, then destroy the cluster |
+| `task talos-cluster:lint` | Run shellcheck on the scripts |
 
-Variables: `CLUSTER` (`acme-lab`), `SUBNET`, `WORKERS`, `DOCKER`, and
-`TALOS_ARGS` for extra `talosctl cluster create docker` arguments, such as
-`--config-patch @file.yaml`. Hosts without IPv6 also need the hidden
-`--disable-ipv6`.
+The steps of `up` are tasks of their own, to run one again:
 
-## Notes
+| Task | What it does |
+|---|---|
+| `task talos-cluster:create` | Create the Talos cluster in Docker; nothing if it exists |
+| `task talos-cluster:kubeconfig` | Write `.run/kubeconfig` and wait for the nodes |
+| `task talos-cluster:dns-forward` | Make the cluster's CoreDNS forward `lab.test` to acme-env |
+| `task talos-cluster:addons` | Install Traefik, external-dns and cert-manager |
+| `task talos-cluster:issuer` | Create the `ClusterIssuer` step-ca |
+| `task talos-cluster:demo` | Deploy whoami with an Ingress |
 
-- **Linux:** node IPs (10.5.0.x) are reachable from the host directly, and
-  so is acme-env from the nodes, through `HOST_IP`.
-- **macOS:** Docker runs in a VM (colima, Docker Desktop), so 10.5.0.x isn't
-  routable from the host. Run the labs inside the VM, or set `HOST_IP` to an
-  address both sides can reach, and use `-p 80:80/tcp,443:443/tcp` in
-  `TALOS_ARGS` with workers set to 0 to expose ingress on the control plane.
-  This setup hasn't been tested yet.
-- The Traefik namespace is labelled `pod-security.kubernetes.io/enforce=privileged`,
-  because hostPorts aren't allowed under Talos' default baseline policy.
-- The CoreDNS change lives in the `coredns` ConfigMap. `talosctl upgrade-k8s`
-  may reset it; re-run `task talos-cluster:dns:forward` afterwards.
+## Use it
+
+Any Ingress in the zone gets a record and a certificate. Give it a host in
+`lab.test`, the class `traefik`, a TLS secret and the issuer:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp
+  annotations:
+    cert-manager.io/cluster-issuer: step-ca
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [myapp.lab.test]
+      secretName: myapp-tls
+  rules:
+    - host: myapp.lab.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: myapp, port: {number: 80}}
+```
+
+[`manifests/whoami.yaml.tmpl`](manifests/whoami.yaml.tmpl) is a whole app
+in this shape. [../docs/access.md](../docs/access.md) shows how to reach the
+cluster with kubectl and talosctl.
+
+## Settings
+
+From the environment, with [`../lab.env`](../lab.env) for what the two labs
+share:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CLUSTER` | `acme-lab` | Name of the cluster, its Docker network and containers |
+| `SUBNET` | `10.5.0.0/24` | The Docker network; the control plane is `.2`, the first worker `.3` |
+| `WORKERS` | `1` | Number of workers |
+| `DOCKER` | `docker` | The Docker command |
+| `TALOS_ARGS` | empty | More arguments for `talosctl cluster create docker`, such as `--config-patch @file.yaml` |
+
+```sh
+WORKERS=2 task talos-cluster:up
+```
+
+Traefik's Ingress address is the first worker, `.3`. A host without IPv6
+needs the hidden `--disable-ipv6` in `TALOS_ARGS`.
+
+## How it is built
+
+```
+Taskfile.yml                 the tasks; each one calls a script in bin/
+bin/                         one script per task, and functions.sh with the chart versions
+values/                      Helm values: traefik.yaml, external-dns.yaml, cert-manager.yaml
+manifests/*.yaml.tmpl        the ClusterIssuer and whoami; bin/render fills in the zone and the root
+.run/                        made by the tasks: kubeconfig, talosconfig, cluster state, manifests
+```
+
+| Document | Content |
+|---|---|
+| [../docs/architecture.md](../docs/architecture.md) | Diagram of both labs, their networks, ports and flows |
+| [../docs/access.md](../docs/access.md) | Reach each service: DNS, etcd, the CA, the cluster |
+| [../docs/troubleshooting.md](../docs/troubleshooting.md) | Where to look, known behaviour, why it is built this way, what is tested |
+| [../../docs/updates.md](../../docs/updates.md) | How the pinned versions are kept current |

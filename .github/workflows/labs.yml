@@ -31,7 +31,10 @@ jobs:
           task acme-env:up
           task acme-env:check
       - name: talos-cluster up + verify
-        run: task talos-cluster:up
+        run: |
+          # Lets a pod reach a service whose pod is on the same node.
+          sudo modprobe br_netfilter
+          task talos-cluster:up
       - name: Diagnostics
         if: failure()
         run: |

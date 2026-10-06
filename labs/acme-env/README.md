@@ -1,134 +1,151 @@
 # acme-env
 
-Split DNS and an internal ACME certificate authority for local clusters,
-running in podman and driven by Task. It's the runnable version of the
-design in the `claude/split-dns-acme-wildcard-Whz6b` branch: CoreDNS for
-split DNS, and step-ca issuing per-name certificates over ACME HTTP-01. It
-uses no wildcard certificates and no RFC 2136.
+Split DNS and an internal certificate authority (CA) for local clusters. Three
+containers in podman on your computer: CoreDNS answers for a lab zone,
+`lab.test`, and step-ca issues certificates for names in it over ACME. A
+cluster, such as [talos-cluster](../talos-cluster), publishes its names in
+the zone and gets its certificates from the CA.
+
+## What you get
+
+- A DNS zone, `lab.test`, whose records anyone can add: external-dns in a
+  cluster, or you with `task acme-env:record-add`. Names outside the zone are
+  forwarded to public resolvers.
+- An ACME CA, the "Lab Internal CA", that issues a certificate for one name
+  at a time over HTTP-01. No wildcard certificates.
+- A root certificate to trust on your computer and in clusters.
+
+| Service | Address | Port | Login |
+|---|---|---|---|
+| DNS, CoreDNS | your host address | 1053, UDP and TCP | none |
+| Record store, etcd | your host address | 23790 | none |
+| ACME directory, step-ca | `https://ca.lab.test:8443/acme/acme/directory` | 8443 | none; clients trust the root |
+
+The host address is the source address of your default route, or `HOST_IP`
+in [`../lab.env`](../lab.env). Containers and cluster nodes reach the
+services there.
+
+## Run it
+
+You need podman, Task and, for the tasks that test DNS, `dig`. On macOS and
+Linux, `task tools` at the root of the repository installs them from the
+Brewfile. The ports 1053, 8443, 23790 and 23800 must be free, and port 80
+for `task acme-env:check`.
 
 ```sh
-task tools               # once, from the repo root: brew bundle (podman, step, dig, …)
-task acme-env:up         # start etcd + CoreDNS + step-ca (creates the CA on first run)
-task acme-env:smoke      # prove it: issue smoke.lab.test over HTTP-01 (binds port 80)
-task acme-env:trust      # trust the lab root CA on this machine
+task acme-env:up        # about 4 seconds; the first run pulls 4 images
+task acme-env:check     # the end-to-end test: about 6 seconds
+task acme-env:trust     # trust the root on this computer (asks for sudo)
 ```
 
-[`../talos-cluster`](../talos-cluster) is the downstream consumer: a Talos
-Kubernetes cluster where external-dns publishes into this DNS and
-cert-manager gets certificates from this CA.
-
-## What runs
-
-All three containers use host networking on unprivileged ports, set in
-[`../lab.env`](../lab.env):
-
-| container | port | role |
-|---|---|---|
-| `acme-env-etcd` | 23790 | record store; external-dns writes here (SkyDNS format) |
-| `acme-env-dns` | 1053 | CoreDNS: serves `lab.test` from etcd, pins `ca.lab.test` to the host, forwards everything else upstream |
-| `acme-env-ca` | 8443 | step-ca with an ACME provisioner; resolves names through CoreDNS when validating |
+`task acme-env:up` ends with the services and whether each one answers:
 
 ```
-external-dns ──writes──▶ etcd ◀──reads── CoreDNS ◀──resolves── step-ca ──HTTP-01──▶ your ingress :80
-                                            ▲                     ▲
-cert-manager ──────────── ACME order ───────┼─────────────────────┘
-any client ── split DNS (lab.test) ─────────┘
+>>> Services of acme-env, zone lab.test, on 192.0.2.2:
+  DNS              192.0.2.2:1053 (UDP and TCP)                  up    task acme-env:dig -- ca
+  etcd             http://192.0.2.2:23790                        up    task acme-env:records
+  ACME directory   https://192.0.2.2:8443/acme/acme/directory    up    task acme-env:check
+  Root certificate /home/you/claude-github/labs/acme-env/.run/root_ca.crt
 ```
 
-The CA and its keys live in the `acme-env-ca` volume, and the records in
-`acme-env-etcd`. `task down` keeps both. `task nuke` deletes them, after
-which you'll need to re-trust the new root.
+`task acme-env:check` puts `smoke.lab.test` in the zone, gets a certificate
+for it with the ACME client lego, which listens on port 80 for the
+challenge, and verifies the certificate against the root:
 
-## Tasks
+```
+>>> Getting a certificate for smoke.lab.test over HTTP-01 ...
+INFO  The server validated our request. domain=smoke.lab.test
+INFO  Server responded with a certificate. domains=smoke.lab.test
+X.509v3 TLS Certificate (ECDSA P-256) [Serial: 2642...6692]
+  Subject:     smoke.lab.test
+  Issuer:      Lab Internal CA Intermediate CA
+  Provisioner: acme
+>>> All good: step-ca issued smoke.lab.test over HTTP-01 through CoreDNS.
+```
 
-| task | does |
+Rootless podman cannot bind port 80. Run the test rootful with
+`PODMAN="sudo podman" task acme-env:check`, or let users bind low ports with
+`sudo sysctl net.ipv4.ip_unprivileged_port_start=80`.
+
+| Task | What it does |
 |---|---|
-| `up` / `down` / `nuke` | start; stop (keep data); stop and delete the CA and records |
-| `env` / `status` / `logs C=ca\|dns\|etcd` | settings, containers, logs |
-| `root` / `trust` / `untrust` | export the root to `.run/root_ca.crt`; install it with `step`; remove it |
-| `record:add NAME= IP=` / `record:rm NAME=` / `records` | manage records by hand (external-dns does this for clusters) |
-| `dig NAME=` | resolve `NAME.lab.test` through the lab CoreDNS |
-| `smoke` / `e2e` | issue a real certificate over HTTP-01 with lego; `up` then `smoke` |
-| `ci` | render the Corefile (no podman needed) |
+| `task acme-env:up` | Start etcd, CoreDNS and step-ca; create the CA on the first run |
+| `task acme-env:status` | List the services and whether each one answers |
+| `task acme-env:check` | Run the end-to-end test |
+| `task acme-env:root` | Copy the root certificate to `.run/root_ca.crt` and print its fingerprint |
+| `task acme-env:trust` | Add the root to this computer's trust store; `untrust` removes it |
+| `task acme-env:record-add -- NAME IP` | Add an A record, `NAME.lab.test` |
+| `task acme-env:record-rm -- NAME` | Remove a name and everything under it |
+| `task acme-env:records` | List every record in etcd |
+| `task acme-env:dig -- NAME` | Resolve `NAME.lab.test` through the lab's CoreDNS |
+| `task acme-env:logs -- ca` | Follow a container's log: `ca`, `dns` or `etcd` |
+| `task acme-env:down` | Stop the containers, keep the CA and the records |
+| `task acme-env:destroy` | Delete the containers, the CA and the records |
+| `task acme-env:lint` | Run shellcheck on the scripts |
 
-Everything is configured in `../lab.env`. `HOST_IP` is detected from the
-default route; set it explicitly if that picks the wrong interface, or on
-macOS, where podman runs in a VM. `PODMAN="sudo podman"` runs rootful,
-which is what `smoke` needs if rootless podman can't bind port 80.
+`task acme-env:down` and `task acme-env:up` keep the CA, its root and the
+records: they live in the podman volumes `acme-env-ca` and `acme-env-etcd`.
+`task acme-env:destroy` deletes them. The next `up` makes a new CA, whose
+root you trust again.
 
-## Pointing your machine at it (optional)
+## Use it
 
-Clusters use it directly. To resolve `lab.test` from your own shell and
-browser as well, route just that zone to `127.0.0.1:1053`:
+Get a certificate with any ACME client: point it at the ACME directory and
+make it trust the root.
 
-- **macOS:** `/etc/resolver/lab.test` containing `nameserver 127.0.0.1` and `port 1053`
-- **Linux (systemd-resolved):** `/etc/systemd/resolved.conf.d/lab.conf`
-  ```ini
-  [Resolve]
-  DNS=127.0.0.1:1053
-  Domains=~lab.test
-  ```
-  then `sudo systemctl restart systemd-resolved`
+```sh
+task acme-env:record-add -- myapp 192.0.2.2         # myapp.lab.test
+sudo LEGO_CA_CERTIFICATES=labs/acme-env/.run/root_ca.crt \
+	lego run --server https://192.0.2.2:8443/acme/acme/directory \
+	--accept-tos --email me@lab.test --domains myapp.lab.test --http
+```
 
-## Decisions
+Use your host address in place of `192.0.2.2`. lego answers the challenge on
+port 80, hence `sudo`. lego reads the root from `LEGO_CA_CERTIFICATES`;
+certbot from
+`REQUESTS_CA_BUNDLE`; cert-manager from `caBundle` in its issuer, as
+[talos-cluster](../talos-cluster) does. To resolve `lab.test` from your own
+shell and browser, route the zone to `127.0.0.1:1053`;
+[docs/access.md](../docs/access.md) has the steps for macOS and Linux.
 
-These are carried over from the design doc.
+## Settings
 
-**Why split DNS.** Some names (the lab zone) should resolve through an
-internal resolver while everything else uses normal upstream DNS, without
-editing `/etc/hosts` per project.
+In [`../lab.env`](../lab.env), shared with talos-cluster. Each one is a
+default, and the environment overrides it: `ZONE=dev.test task acme-env:up`.
 
-**Why CoreDNS rather than dnsmasq or Unbound.** It's the same engine and
-`Corefile` as Kubernetes' in-cluster DNS. `forward` makes split DNS one
-block per zone, and its `etcd` plugin gives external-dns a supported
-write path through the coredns provider. dnsmasq is too limited, and
-Unbound is recursive only.
+| Variable | Default | Meaning |
+|---|---|---|
+| `ZONE` | `lab.test` | The DNS zone, and the names the CA issues for |
+| `DNS_PORT` | `1053` | CoreDNS, UDP and TCP |
+| `CA_PORT` | `8443` | step-ca |
+| `ETCD_PORT` | `23790` | etcd's client port; `ETCD_PEER_PORT`, `23800`, is local only |
+| `UPSTREAM_DNS` | `1.1.1.1 9.9.9.9` | Resolvers for names outside the zone |
+| `HOST_IP` | the source address of the default route | The address the services are reached on |
+| `PODMAN` | `podman` | The podman command; `sudo podman` runs everything rootful |
 
-**Why no wildcard certificates and no RFC 2136.** ACME wildcards need
-DNS-01, which self-hosted means an RFC 2136/TSIG-capable authoritative
-server (Knot or BIND) just for `_acme-challenge` records. Per-name
-certificates over HTTP-01 avoid that:
+The CA's TLS certificate names `ca.lab.test`, `HOST_IP`, `localhost` and
+`127.0.0.1`, as they were when the CA was made. After a change of `ZONE` or
+`HOST_IP`, run `task acme-env:destroy` and `task acme-env:up`.
 
-- the blast radius is one service
-- every issuance is auditable per hostname
-- no shared wildcard key sits in cluster secrets
+## How it is built
 
-With cert-manager automating renewals, per-name certificates cost nothing
-extra to run.
+```
+Taskfile.yml        the tasks; each one calls a script in bin/
+bin/                one script per task, and functions.sh with the image versions
+Corefile.tmpl       CoreDNS: the zone from etcd, ca.<zone> pinned, the rest forwarded
+../lab.env          the settings shared with talos-cluster
+../lab.sh           logging, the settings and the host address, for both labs
+.run/               made by the tasks: the Corefile, the root, lego's files
+```
 
-**Why step-ca and not a public CA.** Internal services only need to be
-trusted by internal clients. step-ca speaks standard ACME, so cert-manager,
-lego, certbot and acme.sh all work against it. It validates HTTP-01 and
-TLS-ALPN-01 from inside the network, defaults to short-lived (24h)
-certificates, and `step certificate install` handles trust on a laptop.
+| Document | Content |
+|---|---|
+| [../docs/architecture.md](../docs/architecture.md) | Diagram of both labs, their networks, ports and flows |
+| [../docs/access.md](../docs/access.md) | Reach each service: DNS, etcd, the CA, the cluster |
+| [../docs/troubleshooting.md](../docs/troubleshooting.md) | Where to look, known behaviour, why it is built this way, what is tested |
+| [../../docs/updates.md](../../docs/updates.md) | How the pinned versions are kept current |
 
-**Out of scope (future directions):**
-- **Public, tenant-facing certificates** need a public CA. The best fit
-  for "issue on first request" is Caddy on-demand TLS with an `ask`
-  endpoint.
-- **Gateway API with on-demand TLS:** no mainstream implementation does
-  per-SNI issuance. Create `Certificate` resources at tenant signup instead,
-  or put Caddy in front of the Gateway.
-- **Public wildcards via RFC 2136:** if ever needed, pair CoreDNS with a
-  tiny Knot instance authoritative only for `_acme-challenge.<zone>`,
-  reached through a CNAME delegation.
-
-## Changes from the original doc
-
-- Everything runs as containers (podman, host network) driven by Task,
-  instead of brew-installed daemons wrapped in launchd or systemd units.
-- An etcd-backed zone was added so external-dns can publish records.
-  CoreDNS still forwards everything else upstream.
-- Upstream DNS is explicit (`1.1.1.1 9.9.9.9`), never `/etc/resolv.conf`,
-  which avoids the systemd-resolved forwarding loop the doc warned about.
-- The cluster example uses Traefik rather than ingress-nginx, which has
-  been retired. See `../talos-cluster`.
-
-## Operational notes
-
-- Keep the `acme-env-ca` volume if you've trusted its root. Losing it means
-  re-trusting on every machine.
-- The CA's TLS certificate covers `ca.lab.test`, `HOST_IP`, `localhost` and
-  `127.0.0.1`. If `HOST_IP` changes, run `task nuke up` and re-trust.
-- Containers run with `--http-proxy=false`, so a corporate `HTTPS_PROXY`
-  on the host never captures the lab's internal traffic.
+The design comes from the branch `claude/split-dns-acme-wildcard-Whz6b`,
+which compared CoreDNS with dnsmasq and Unbound, and HTTP-01 with wildcard
+certificates over DNS-01. [../docs/troubleshooting.md](../docs/troubleshooting.md)
+keeps the reasons.

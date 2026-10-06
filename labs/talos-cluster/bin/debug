@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Prints what helps when up or verify fails: Helm, nodes, pods, events and
-# logs per lab namespace, the cluster's CoreDNS, and acme-env's DNS over UDP
-# and TCP from the cluster's Docker network. Never fails itself.
+# Prints what helps when up or verify fails: br_netfilter on this host,
+# Helm, nodes, pods, events and logs per lab namespace, the cluster's
+# CoreDNS, and acme-env's DNS over UDP and TCP from the cluster's Docker
+# network. Never fails itself.
 #
 
 source "${0%/*}/functions.sh" || exit $?
@@ -15,6 +16,14 @@ function section()
 	echo
 	log "$1"
 }
+
+section "This host"
+if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
+	echo "br_netfilter: loaded, bridge-nf-call-iptables =" \
+		"$(< /proc/sys/net/bridge/bridge-nf-call-iptables)"
+else
+	echo "br_netfilter: not loaded"
+fi
 
 section "Helm"
 helm version --short
