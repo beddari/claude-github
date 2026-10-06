@@ -108,9 +108,9 @@ seconds. Waiting on the workloads themselves says what is not ready.
 ## What is tested
 
 The `labs` workflow runs on GitHub's `ubuntu-latest` runners for every
-change under `labs/`: `task acme-env:up`, `task acme-env:check`,
+pull request that changes the labs, but not their docs: `task acme-env:up`, `task acme-env:check`,
 `task talos-cluster:up` with its `verify`, then `down` for both. A run takes
-about 5 minutes. acme-env and `task acme-env:check` also run on a Linux host
+about 6 minutes. acme-env and `task acme-env:check` also run on a Linux host
 with rootful podman.
 
 Not tested:

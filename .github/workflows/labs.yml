@@ -1,18 +1,34 @@
 name: labs
 
 # End-to-end run of labs/: acme-env in podman, then a Talos cluster in Docker
-# that gets DNS records and certificates from it. Slow (~10 min), so it only
-# runs when labs/ changes, or on demand.
+# that gets DNS records and certificates from it. It takes about 6 minutes, so
+# on a pull request it runs only when bin/labs-changed says the change needs
+# it; changes to the labs' docs do not. When it does not run, e2e is skipped,
+# which counts as passed, so e2e can be a required check. It does not run
+# again on main: with "require branches to be up to date", a pull request was
+# tested as main will be.
 on:
   pull_request:
-    paths: ['labs/**', '.github/workflows/labs.yml']
-  push:
-    branches: [main]
-    paths: ['labs/**', '.github/workflows/labs.yml']
   workflow_dispatch:
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      labs: ${{ steps.diff.outputs.labs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: diff
+        # HEAD is the pull request merged into its base, HEAD^1 the base.
+        run: |
+          labs="$(bin/labs-changed HEAD^1 HEAD)"
+          echo "labs=$labs" >> "$GITHUB_OUTPUT"
+
   e2e:
+    needs: changes
+    if: needs.changes.outputs.labs == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

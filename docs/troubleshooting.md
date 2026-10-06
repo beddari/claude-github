@@ -70,7 +70,8 @@ On every pull request, by the `ci` workflow on GitHub's `ubuntu-latest`:
 shellcheck on all bash, the drawer's index and the docs' links, the tests of
 drawer and skill-audit, skill-audit's check of its sample skills, the
 Spotify app's configuration, and the labs' templates. The `labs` workflow
-runs both labs end to end when `labs/` changes.
+runs both labs end to end when the change needs it; see
+[updates.md](updates.md#check-a-pull-request).
 
 Not tested:
 

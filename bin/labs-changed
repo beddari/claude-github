@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# Prints true when the changes from BASE to HEAD need the labs' end-to-end
+# run, and false when they do not. Their docs do not; their scripts,
+# templates, values and workflow do.
+#
+# Usage: bin/labs-changed [BASE [HEAD]]
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+#
+# Returns 0 when the labs' end-to-end run depends on the file.
+#
+function needs_labs()
+{
+	case "$1" in
+		labs/docs/*|labs/*.md)		return 1 ;;
+		labs/*)				return 0 ;;
+		.github/workflows/labs.yml)	return 0 ;;
+		bin/labs-changed)		return 0 ;;
+		*)				return 1 ;;
+	esac
+}
+
+base="${1:-origin/main}"
+head="${2:-HEAD}"
+
+files="$(git -C "$root" diff --name-only "$base...$head")" ||
+	fail "git diff $base...$head failed!"
+
+while IFS= read -r file; do
+	if needs_labs "$file"; then
+		log "$file needs the labs' end-to-end run." >&2
+		echo true
+		exit 0
+	fi
+done <<< "$files"
+echo false

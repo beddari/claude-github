@@ -50,6 +50,7 @@ docs OK (14 markdown files, all relative links resolve)
 | `task tools` | Install the tools in the Brewfile |
 | `task ci` | Check the drawer's index and the docs' links, then run every project's `ci` |
 | `task lint` | Run shellcheck on every bash script |
+| `task labs-changed -- [BASE]` | Say whether the changes since BASE, `origin/main` by default, need the labs run end to end |
 | `task index-check` | Check that `wires.json` lists every project |
 | `task docs-check` | Check that every relative link in the markdown files resolves |
 | `task serve` | Serve the repository as it is at http://127.0.0.1:8000/ |
@@ -92,7 +93,7 @@ assets/                  the landing page's background photo
 apps/ tools/ labs/       the wires, each with a Taskfile.yml and a README
 infra/drawer/            Go: checks wires.json and the docs, builds the site, serves it
 templates/go-cli/        what task new-go copies
-bin/                     the root tasks' scripts: ci, lint, clean, new-go
+bin/                     the root tasks' scripts: ci, lint, clean, new-go, labs-changed
 Taskfile.yml             the root tasks, and every project's under includes:
 go.work                  the Go workspace: every module
 Brewfile                 the tools
