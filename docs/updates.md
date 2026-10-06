@@ -42,14 +42,23 @@ and GitHub counts a skipped job as passed. To see what a branch would do:
 task labs-changed               # true or false, against origin/main
 ```
 
-Neither workflow runs again on `main` after a merge: it would test the
-same files. That holds when the pull request was tested on the newest
-`main`. A ruleset makes sure of it: in the repository's settings, under
-Rules, add to the ruleset for `main` "Require status checks to pass", with
-"Require branches to be up to date before merging" and the checks `ci` and
-`e2e`. Until then, a pull request merged after another can reach `main`
-untested together with it. A version of a lab image or chart is tested end
-to end by `labs`, on a fresh Talos cluster, before it can be merged.
+`labs` does not run again on `main` after a merge: it would test the same
+files. `ci` does, because it is quick. That holds when the pull request was
+tested on the newest `main`. A ruleset makes sure of it, in the
+repository's settings under Rules, Rulesets, `default`:
+
+1. Tick "Require status checks to pass". Under "Show additional settings",
+   tick "Require branches to be up to date before merging".
+2. "Add checks": `ci` and `e2e`, from GitHub Actions.
+3. Under "Bypass list", add Repository admin, "For pull requests only".
+
+The bypass keeps a merge by hand possible: an admin gets "Merge without
+waiting for requirements" on a pull request. Such a merge reaches `main`
+without `e2e` on it, and nothing runs it afterwards. Run it from the Actions
+tab, `labs`, "Run workflow", which always runs `e2e`.
+
+A version of a lab image or chart is tested end to end by `labs`, on a fresh
+Talos cluster, before it can be merged.
 
 ## What a version does not pin
 
