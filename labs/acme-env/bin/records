@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#
+# Lists every record in etcd: what external-dns and record-add published.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+etcd get --prefix /skydns || fail "Reading etcd failed: is $name up?"

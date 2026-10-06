@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#
+# Resolves a name in the zone through the lab's CoreDNS: dig NAME.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+command -v dig >/dev/null || fail "dig is missing: task tools (brew bind)"
+
+dig @127.0.0.1 -p "$dns_port" +short "${1:-ca}.$zone"

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#
+# Installs Traefik, external-dns and cert-manager with Helm, then waits for
+# their workloads. "helm --wait" is not used: it hung on Traefik in CI while
+# the pod was Ready.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+#
+# Adds or updates a Helm chart repository.
+#
+function repo()
+{
+	helm repo add "$1" "$2" --force-update >/dev/null
+}
+
+#
+# Waits for a Deployment or DaemonSet to be rolled out.
+#
+function rolled_out()
+{
+	kubectl -n "$1" rollout status "$2" --timeout=5m
+}
+
+repo traefik https://traefik.github.io/charts ||
+	fail "Adding the traefik chart repository failed!"
+repo external-dns https://kubernetes-sigs.github.io/external-dns ||
+	fail "Adding the external-dns chart repository failed!"
+repo jetstack https://charts.jetstack.io ||
+	fail "Adding the jetstack chart repository failed!"
+
+# Traefik binds hostPorts, which Talos' default PodSecurity forbids.
+kubectl create namespace traefik --dry-run=client -o yaml |
+	kubectl apply -f - >/dev/null ||
+	fail "Creating the traefik namespace failed!"
+kubectl label namespace traefik --overwrite \
+	pod-security.kubernetes.io/enforce=privileged >/dev/null ||
+	fail "Labelling the traefik namespace failed!"
+
+log "Installing Traefik, external-dns and cert-manager ..."
+helm upgrade --install traefik traefik/traefik \
+	--version "$traefik_version" -n traefik \
+	-f "$root/values/traefik.yaml" \
+	--set "providers.kubernetesIngress.ingressEndpoint.ip=$worker_ip" ||
+	fail "Installing Traefik failed!"
+helm upgrade --install external-dns external-dns/external-dns \
+	--version "$external_dns_version" -n external-dns --create-namespace \
+	-f "$root/values/external-dns.yaml" \
+	--set "env[0].value=http://$host_ip:$etcd_port" \
+	--set "domainFilters[0]=$zone" --set "txtOwnerId=$cluster" ||
+	fail "Installing external-dns failed!"
+helm upgrade --install cert-manager jetstack/cert-manager \
+	--version "$cert_manager_version" -n cert-manager --create-namespace \
+	-f "$root/values/cert-manager.yaml" ||
+	fail "Installing cert-manager failed!"
+
+for workload in traefik/daemonset/traefik \
+	external-dns/deployment/external-dns \
+	cert-manager/deployment/cert-manager \
+	cert-manager/deployment/cert-manager-webhook \
+	cert-manager/deployment/cert-manager-cainjector; do
+	rolled_out "${workload%%/*}" "${workload#*/}" ||
+		fail "${workload##*/} did not roll out: task talos-cluster:debug"
+done

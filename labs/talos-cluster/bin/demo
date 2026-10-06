@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# Deploys whoami with an Ingress. The Ingress makes external-dns publish
+# whoami.<zone> and cert-manager order its certificate.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+"$root/bin/render" || exit $?
+kubectl apply -f "$run_dir/whoami.yaml" || fail "Deploying whoami failed!"
+kubectl -n whoami rollout status deploy/whoami --timeout=180s ||
+	fail "whoami did not start!"

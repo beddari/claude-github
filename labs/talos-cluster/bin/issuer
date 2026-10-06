@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# Creates the ClusterIssuer step-ca and waits for it to be Ready.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+"$root/bin/render" || exit $?
+kubectl apply -f "$run_dir/cluster-issuer.yaml" ||
+	fail "Creating the ClusterIssuer failed!"
+kubectl wait clusterissuer/step-ca --for=condition=Ready --timeout=120s ||
+	fail "The issuer is not Ready: task talos-cluster:debug"

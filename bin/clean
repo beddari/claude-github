@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#
+# Removes _site/ and runs the clean task of every project that has one.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+rm -rf "$root/_site" || fail "Removing _site failed!"
+for dir in $(projects); do
+	task -d "$root/$dir" --list-all 2>/dev/null | grep -q '^\* clean:' ||
+		continue
+	task -d "$root/$dir" clean || fail "$dir: task clean failed!"
+done

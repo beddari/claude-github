@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# Removes the demo, so that external-dns deletes its records, then destroys
+# the cluster. Also cleans up after a cluster that was only half created.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+if kubectl get ns whoami >/dev/null 2>&1; then
+	log "Removing whoami and its records ..."
+	kubectl delete ns whoami --wait=true --timeout=120s >/dev/null
+	sleep 15	# one external-dns sync interval
+fi
+
+log "Destroying $cluster ..."
+talosctl cluster destroy --name "$cluster" --state "$run_dir/clusters"
+"$docker" ps -aq --filter "label=talos.cluster.name=$cluster" |
+	xargs -r "$docker" rm -f >/dev/null
+"$docker" network rm "$cluster" >/dev/null 2>&1
+rm -rf "$run_dir/clusters/$cluster" "$KUBECONFIG" "$TALOSCONFIG" ||
+	fail "Removing the cluster's files failed!"

@@ -25,7 +25,7 @@ jobs:
         with:
           go-version-file: go.work
       - run: go install github.com/go-task/task/v3/cmd/task@latest
-      - run: task index:check site
+      - run: task index-check site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

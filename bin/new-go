@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# Creates a Go CLI at tools/NAME from templates/go-cli, adds it to go.work,
+# the drawer and the root Taskfile, and runs its ci: new-go NAME [BLURB].
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+name="$1"
+blurb="${2:-TODO: describe this wire.}"
+dest="$root/tools/$name"
+
+[[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] ||
+	fail "usage: task new-go -- NAME [BLURB]; NAME in lowercase, digits, -"
+[[ -e "$dest" ]] && fail "tools/$name exists already!"
+
+#
+# Copies the template, putting the name in for __NAME__.
+#
+function copy_template()
+{
+	local tmpl out
+
+	mkdir -p "$dest" || return $?
+	for tmpl in "$root"/templates/go-cli/*.tmpl; do
+		out="${tmpl##*/}"
+		out="${out%.tmpl}"
+		[[ "$out" == gitignore ]] && out=".gitignore"
+		sed "s/__NAME__/$name/g" "$tmpl" > "$dest/$out" || return $?
+	done
+}
+
+#
+# Appends the project to includes:, which stays last in the root Taskfile.
+#
+function include_taskfile()
+{
+	printf '  %s:\n    taskfile: tools/%s/Taskfile.yml\n    dir: tools/%s\n' \
+		"$name" "$name" "$name" >> "$root/Taskfile.yml"
+}
+
+log "Creating tools/$name ..."
+copy_template                     || fail "Copying the template failed!"
+(cd "$root" && go work use "./tools/$name") ||
+	fail "Adding tools/$name to go.work failed!"
+drawer add "$name" "tools/$name" tool "$blurb" ||
+	fail "Adding $name to wires.json failed!"
+include_taskfile                  || fail "Adding $name to Taskfile.yml failed!"
+task -d "$dest" ci                || fail "tools/$name: task ci failed!"
+log "Created tools/$name. Try: task $name:run"

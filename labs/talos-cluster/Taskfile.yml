@@ -1,229 +1,88 @@
-# talos-cluster: a small Talos Kubernetes cluster in Docker that consumes
-# acme-env: external-dns publishes Ingress hostnames into acme-env's
-# CoreDNS (via etcd), and cert-manager gets certificates from its step-ca.
-version: '3'
-
-vars:
-  DOCKER: '{{.DOCKER | default "docker"}}'
-  CLUSTER: '{{.CLUSTER | default "acme-lab"}}'
-  SUBNET: '{{.SUBNET | default "10.5.0.0/24"}}'
-  WORKERS: '{{.WORKERS | default "1"}}'
-  # Extra `talosctl cluster create docker` args, e.g. TALOS_ARGS="--config-patch @my.yaml"
-  # (hosts without IPv6 need the hidden "--disable-ipv6").
-  TALOS_ARGS: '{{.TALOS_ARGS | default ""}}'
-  NET: {sh: 'echo "{{.SUBNET}}" | cut -d. -f1-3'}
-  CP_IP: '{{.NET}}.2'
-  WORKER_IP: '{{.NET}}.3'
-  ZONE: {sh: . ../lab.env && echo "$ZONE"}
-  DNS_PORT: {sh: . ../lab.env && echo "$DNS_PORT"}
-  CA_PORT: {sh: . ../lab.env && echo "$CA_PORT"}
-  ETCD_PORT: {sh: . ../lab.env && echo "$ETCD_PORT"}
-  HOST_IP: {sh: ../lab-host-ip.sh}
-  ROOT_CA: '{{.TASKFILE_DIR}}/../acme-env/.run/root_ca.crt'
-  RUN: '{{.TASKFILE_DIR}}/.run'
-  CERT_MANAGER_VERSION: v1.21.2
-  EXTERNAL_DNS_VERSION: 1.23.0
-  TRAEFIK_VERSION: 41.6.1
-
-env:
-  KUBECONFIG: '{{.TASKFILE_DIR}}/.run/kubeconfig'
-  TALOSCONFIG: '{{.TASKFILE_DIR}}/.run/talosconfig'
+# talos-cluster: Talos Kubernetes in Docker that consumes acme-env.
+# Each task calls a script in bin/; see README.md.
+version: "3"
 
 tasks:
+  # Plain "task" lists the tasks. It has no description, so it is not listed.
   default:
-    desc: Show cluster status
+    silent: true
     cmds:
-      - task: status
+      - task --list
 
   up:
-    desc: Create the cluster and install Traefik, external-dns, cert-manager, the step-ca issuer and the whoami demo
-    preconditions:
-      - sh: '{{.DOCKER}} info >/dev/null 2>&1'
-        msg: "Docker Engine is not reachable (Linux: start dockerd; macOS: colima start)"
-      - sh: command -v talosctl && command -v kubectl && command -v helm && command -v jq
-        msg: "missing tools — run `task tools` at the repo root (brew bundle)"
-      - sh: 'curl -fsk --noproxy "*" https://{{.HOST_IP}}:{{.CA_PORT}}/health'
-        msg: "acme-env is not running on {{.HOST_IP}} — run: task acme-env:up"
-      - sh: test -f {{.ROOT_CA}}
-        msg: "acme-env root cert missing — run: task acme-env:root"
+    desc: Create the cluster, install the add-ons, issuer and demo, then run verify. About 5 minutes
+    silent: true
     cmds:
-      - task: cluster:create
-      - task: kubeconfig
-      - task: dns:forward
-      - task: addons
-      - task: issuer
-      - task: demo
-      - task: verify
-
-  cluster:create:
-    desc: talosctl cluster create docker (no-op if it already exists)
-    status:
-      - '{{.DOCKER}} inspect {{.CLUSTER}}-controlplane-1 >/dev/null 2>&1'
-    cmds:
-      - mkdir -p {{.RUN}}
-      - >-
-        talosctl cluster create docker --name {{.CLUSTER}} --state {{.RUN}}/clusters
-        --subnet {{.SUBNET}} --workers {{.WORKERS}}
-        --talosconfig-destination {{.RUN}}/talosconfig {{.TALOS_ARGS}}
-
-  kubeconfig:
-    desc: Write .run/kubeconfig (export KUBECONFIG=labs/talos-cluster/.run/kubeconfig to use it)
-    cmds:
-      - talosctl kubeconfig {{.RUN}}/kubeconfig --nodes {{.CP_IP}} --merge=false --force
-      - kubectl wait --for=condition=Ready nodes --all --timeout=300s
-
-  dns:forward:
-    desc: Make in-cluster CoreDNS forward the lab zone to acme-env's CoreDNS (idempotent; replaces an older block)
-    cmds:
-      - |
-        set -e
-        block=$(printf '{{.ZONE}}:53 {\n    errors\n    cache 5\n    forward . {{.HOST_IP}}:{{.DNS_PORT}} {\n        force_tcp\n    }\n}')
-        cur=$(kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}')
-        if printf '%s\n' "$cur" | grep -qF "$(printf '%s' "$block" | sed -n 4p)"; then echo "coredns already forwards {{.ZONE}} over TCP"; exit 0; fi
-        # Drop any previous block for the zone, then append the current one.
-        base=$(printf '%s\n' "$cur" | awk '/^{{.ZONE}}:53 \{/ {skip=1} !skip {print} skip && /^\}/ {skip=0}')
-        new=$(printf '%s\n\n%s\n' "$base" "$block")
-        kubectl -n kube-system patch cm coredns --type merge -p "$(jq -n --arg c "$new" '{data: {Corefile: $c}}')"
-        kubectl -n kube-system rollout restart deploy/coredns
-        kubectl -n kube-system rollout status deploy/coredns --timeout=120s
-
-  addons:
-    desc: Install Traefik, external-dns and cert-manager with Helm
-    cmds:
-      - helm repo add traefik https://traefik.github.io/charts --force-update >/dev/null
-      - helm repo add external-dns https://kubernetes-sigs.github.io/external-dns --force-update >/dev/null
-      - helm repo add jetstack https://charts.jetstack.io --force-update >/dev/null
-      # hostPorts need a privileged namespace under Talos' default PodSecurity (baseline).
-      - kubectl create namespace traefik --dry-run=client -o yaml | kubectl apply -f -
-      - kubectl label namespace traefik pod-security.kubernetes.io/enforce=privileged --overwrite
-      - >-
-        helm upgrade --install traefik traefik/traefik --version {{.TRAEFIK_VERSION}}
-        -n traefik -f values/traefik.yaml
-        --set providers.kubernetesIngress.ingressEndpoint.ip={{.WORKER_IP}}
-      - >-
-        helm upgrade --install external-dns external-dns/external-dns --version {{.EXTERNAL_DNS_VERSION}}
-        -n external-dns --create-namespace -f values/external-dns.yaml
-        --set env[0].value=http://{{.HOST_IP}}:{{.ETCD_PORT}}
-        --set 'domainFilters[0]={{.ZONE}}' --set txtOwnerId={{.CLUSTER}}
-      - >-
-        helm upgrade --install cert-manager jetstack/cert-manager --version {{.CERT_MANAGER_VERSION}}
-        -n cert-manager --create-namespace -f values/cert-manager.yaml
-      # Wait on the workloads themselves rather than `helm --wait`, which timed out
-      # on Traefik in CI even though its pod was Ready.
-      - kubectl -n traefik rollout status daemonset/traefik --timeout=5m
-      - kubectl -n external-dns rollout status deployment/external-dns --timeout=5m
-      - kubectl -n cert-manager rollout status deployment/cert-manager --timeout=5m
-      - kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=5m
-      - kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --timeout=5m
-
-  render:
-    desc: Render manifests/*.tmpl into .run/ (zone, CA port, CA bundle)
-    cmds:
-      - mkdir -p {{.RUN}}
-      - |
-        set -e
-        bundle=$( [ -f {{.ROOT_CA}} ] && base64 < {{.ROOT_CA}} | tr -d '\n' || echo NO_ROOT_CA_YET )
-        for f in manifests/*.yaml.tmpl; do
-          sed -e 's/__ZONE__/{{.ZONE}}/g' -e 's/__CA_PORT__/{{.CA_PORT}}/g' -e "s#__CA_BUNDLE__#$bundle#g" \
-            "$f" > {{.RUN}}/$(basename "$f" .tmpl)
-        done
-
-  issuer:
-    desc: Create the step-ca ClusterIssuer
-    deps: [render]
-    cmds:
-      - kubectl apply -f {{.RUN}}/cluster-issuer.yaml
-      - kubectl wait clusterissuer/step-ca --for=condition=Ready --timeout=120s
-
-  demo:
-    desc: Deploy whoami with an Ingress (→ DNS record + certificate)
-    deps: [render]
-    cmds:
-      - kubectl apply -f {{.RUN}}/whoami.yaml
-      - kubectl -n whoami rollout status deploy/whoami --timeout=180s
-
-  verify:
-    desc: 'Check the chain: DNS record in acme-env, certificate Ready, HTTPS from the host with the lab root'
-    cmds:
-      - kubectl -n whoami wait certificate/whoami-tls --for=condition=Ready --timeout=300s
-      - |
-        set -e
-        for i in $(seq 1 60); do
-          ip=$(dig @{{.HOST_IP}} -p {{.DNS_PORT}} +short whoami.{{.ZONE}} | tail -1)
-          [ "$ip" = "{{.WORKER_IP}}" ] && { echo "dns: whoami.{{.ZONE}} -> $ip (published by external-dns)"; break; }
-          [ "$i" = 60 ] && { echo "dns: whoami.{{.ZONE}} resolved to '$ip', want {{.WORKER_IP}}" >&2; exit 1; }
-          sleep 2
-        done
-      # Traefik picks up the new TLS secret a few seconds after the Certificate turns Ready;
-      # until then it serves its default self-signed cert, so retry instead of failing at once.
-      - |
-        for i in $(seq 1 30); do
-          if out=$(curl -fsS --noproxy '*' --cacert {{.ROOT_CA}} --resolve whoami.{{.ZONE}}:443:{{.WORKER_IP}} \
-                https://whoami.{{.ZONE}}/ 2>&1); then
-            printf '%s\n' "$out" | grep -E '^(Hostname|Host):' && exit 0
-          fi
-          sleep 2
-        done
-        echo "https: whoami.{{.ZONE}} never served a certificate trusted by the lab root: $out" >&2; exit 1
-      - >-
-        echo | openssl s_client -connect {{.WORKER_IP}}:443 -servername whoami.{{.ZONE}} 2>/dev/null
-        | openssl x509 -noout -issuer -enddate -ext subjectAltName
-      - echo "verify OK — whoami.{{.ZONE}} has a DNS record from external-dns and a step-ca cert from cert-manager"
+      - bin/up
 
   status:
-    desc: Nodes, lab workloads and certificates
+    desc: Show the nodes, the lab's workloads and the certificates
+    silent: true
     cmds:
-      - helm version --short
-      - helm list -A
-      - kubectl get nodes -o wide
-      - kubectl get pods -A -o wide --field-selector=metadata.namespace!=kube-system
-      - kubectl get ingress,certificate -A
+      - bin/status
+
+  verify:
+    desc: "Run the end-to-end test: certificate Ready, DNS record from external-dns, HTTPS trusted by the lab's root"
+    silent: true
+    cmds:
+      - bin/verify
 
   debug:
-    desc: Dump nodes, pods, events and recent logs for the lab namespaces (for when up/verify fails)
-    ignore_error: true
+    desc: Print Helm, pods, events, logs and the cluster's DNS, for when up or verify fails
+    silent: true
     cmds:
-      - helm version --short
-      - helm list -A
-      - kubectl get nodes -o wide
-      - kubectl get pods -A -o wide
-      - |
-        for ns in traefik external-dns cert-manager whoami; do
-          kubectl get ns "$ns" >/dev/null 2>&1 || continue
-          echo "=== $ns: describe pods"
-          kubectl -n "$ns" describe pods | grep -E '^(Name:|Status:|  [A-Za-z]+:)|Reason|Message|Warning|Failed|Back-off|pull' | head -60
-          echo "=== $ns: events"
-          kubectl -n "$ns" get events --sort-by=.lastTimestamp | tail -25
-          echo "=== $ns: logs"
-          kubectl -n "$ns" logs --all-containers --prefix --tail=40 -l 'app.kubernetes.io/instance' 2>/dev/null | tail -60
-        done
-      - kubectl get ingress,certificate,certificaterequest,order,challenge -A 2>/dev/null
-      - echo "=== cluster CoreDNS config + logs"
-      - kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}'
-      - kubectl -n kube-system logs -l k8s-app=kube-dns --tail=20 --prefix
-      - echo "=== acme-env DNS from the cluster's Docker network (UDP, then TCP)"
-      - >-
-        {{.DOCKER}} run --rm --network {{.CLUSTER}} docker.io/library/alpine:3 sh -c
-        'apk add -q bind-tools >/dev/null && dig @{{.HOST_IP}} -p {{.DNS_PORT}} +time=3 +tries=1 +short ca.{{.ZONE}};
-        dig @{{.HOST_IP}} -p {{.DNS_PORT}} +tcp +time=3 +tries=1 +short ca.{{.ZONE}}'
+      - bin/debug
+
+  create:
+    desc: "Step of up: create the Talos cluster in Docker"
+    silent: true
+    cmds:
+      - bin/create
+
+  kubeconfig:
+    desc: "Step of up: write .run/kubeconfig and wait for the nodes"
+    silent: true
+    cmds:
+      - bin/kubeconfig
+
+  dns-forward:
+    desc: "Step of up: forward the lab zone from the cluster's CoreDNS to acme-env, over TCP"
+    silent: true
+    cmds:
+      - bin/dns-forward
+
+  addons:
+    desc: "Step of up: install Traefik, external-dns and cert-manager"
+    silent: true
+    cmds:
+      - bin/addons
+
+  issuer:
+    desc: "Step of up: create the ClusterIssuer step-ca"
+    silent: true
+    cmds:
+      - bin/issuer
+
+  demo:
+    desc: "Step of up: deploy whoami with an Ingress"
+    silent: true
+    cmds:
+      - bin/demo
 
   down:
-    desc: Remove the demo (so external-dns deletes its records), then destroy the cluster
+    desc: Remove the demo and its DNS records, then destroy the cluster
+    prompt: Destroy the cluster and everything in it?
+    silent: true
     cmds:
-      - |
-        if kubectl get ns whoami >/dev/null 2>&1; then
-          kubectl delete ns whoami --wait=true --timeout=120s
-          sleep 15  # one external-dns sync interval, so the zone is cleaned up
-        fi
-      - talosctl cluster destroy --name {{.CLUSTER}} --state {{.RUN}}/clusters || true
-      # Also clean up after a half-created cluster that has no state file.
-      - '{{.DOCKER}} ps -aq --filter label=talos.cluster.name={{.CLUSTER}} | xargs -r {{.DOCKER}} rm -f'
-      - '{{.DOCKER}} network rm {{.CLUSTER}} >/dev/null 2>&1 || true'
-      - rm -rf {{.RUN}}/clusters/{{.CLUSTER}} {{.RUN}}/kubeconfig {{.RUN}}/talosconfig
+      - bin/down
 
   ci:
-    desc: Static checks that need no cluster (render manifests, parse YAML)
+    desc: Render the manifests and parse every YAML file, with no cluster needed
     cmds:
-      - task: render
-      - for f in {{.RUN}}/*.yaml values/*.yaml; do yq -e 'true' "$f" >/dev/null; done
-      - echo "talos-cluster config OK"
+      - bin/render
+      - for f in .run/*.yaml values/*.yaml; do yq -e true "$f" >/dev/null; done
+
+  lint:
+    desc: Run shellcheck on the scripts
+    cmds:
+      - shellcheck -s bash -e SC2034,SC2154,SC1090,SC1091,SC2242 bin/* ../lab.sh

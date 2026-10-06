@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Follows the log of one container: logs ca|dns|etcd. Default: ca.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+case "${1:-ca}" in
+	ca|dns|etcd)	pod logs -f "$name-${1:-ca}" ;;
+	*)		fail "usage: task acme-env:logs -- ca|dns|etcd" ;;
+esac

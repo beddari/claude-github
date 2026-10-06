@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# Runs shellcheck on the bash in bin/, labs/*/bin/ and labs/lab.sh, and on
+# the session hook, with the exclusions of the bash-style skill.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+command -v shellcheck >/dev/null ||
+	fail "shellcheck is missing: task tools (brew bundle)"
+
+cd "$root" || fail "Could not enter $root!"
+shellcheck -s bash -e SC2034,SC2154,SC1090,SC1091,SC2242 \
+	bin/* labs/*/bin/* labs/lab.sh .claude/hooks/*.sh ||
+	fail "shellcheck found problems!"
+log "shellcheck: no problems."

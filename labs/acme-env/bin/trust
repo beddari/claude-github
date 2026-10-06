@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# Adds the CA's root to this computer's trust store, with the step CLI.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+command -v step >/dev/null || fail "step is missing: task tools"
+
+"$root/bin/root" >/dev/null || exit $?
+step certificate install "$run_dir/root_ca.crt" ||
+	fail "Installing the root certificate failed!"

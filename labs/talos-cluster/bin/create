@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# Creates the Talos cluster in Docker: one control plane and WORKERS
+# workers on SUBNET. Does nothing when it exists.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+cluster_exists && exit 0
+
+log "Creating $cluster: 1 control plane, $workers worker(s), $subnet ..."
+mkdir -p "$run_dir" || fail "Could not create $run_dir!"
+talosctl cluster create docker --name "$cluster" \
+	--state "$run_dir/clusters" --subnet "$subnet" --workers "$workers" \
+	--talosconfig-destination "$TALOSCONFIG" "${talos_args[@]}" ||
+	fail "Creating $cluster failed!"

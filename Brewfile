@@ -14,6 +14,7 @@ brew "helm"            # cert-manager, external-dns, Traefik charts
 brew "step"            # trust/inspect the lab CA
 brew "bind"            # dig
 brew "jq"
+brew "shellcheck"     # task lint
 
 # The Talos docker provisioner needs a Docker Engine API.
 #   Linux: install Docker Engine from your distro (brew's "docker" is only the CLI).

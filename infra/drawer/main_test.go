@@ -176,3 +176,34 @@ func TestServe(t *testing.T) {
 		t.Errorf("status %d", resp.StatusCode)
 	}
 }
+
+func TestDocs(t *testing.T) {
+	r := repo(t)
+	write := func(rel, body string) {
+		p := filepath.Join(r, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("README.md", "# Top\n\nSee [arch](docs/arch.md#the-flows), [web](https://x.y/z) and [self](#top).\n\n[ref]: docs/arch.md\n")
+	write("docs/arch.md", "# Arch\n\n## The `flows`\n\n```\n[not a link](nowhere.md)\n```\n\nInline `[code](nowhere.md)` is skipped.\n")
+	write("x/testdata/bad.md", "[skipped](missing.md)\n")
+	if out := runOK(t, "-root", r, "docs"); !strings.Contains(out, "docs OK") {
+		t.Errorf("docs: %s", out)
+	}
+
+	write("docs/more.md", "[gone](../nope.md) and [bad anchor](arch.md#nope) and [ok](arch.md#arch)\n")
+	var out, errb bytes.Buffer
+	if code := run([]string{"-root", r, "docs"}, &out, &errb); code != 1 {
+		t.Fatalf("broken links not caught: %d %s", code, errb.String())
+	}
+	for _, want := range []string{`docs/more.md:1: link to "../nope.md": no such file`, `link to "arch.md#nope": no heading`} {
+		if !strings.Contains(errb.String(), want) {
+			t.Errorf("missing %q in:\n%s", want, errb.String())
+		}
+	}
+	if strings.Contains(errb.String(), "arch.md#arch") {
+		t.Errorf("valid anchor reported:\n%s", errb.String())
+	}
+}

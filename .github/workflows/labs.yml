@@ -26,8 +26,10 @@ jobs:
           brew install go-task talosctl
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
       - run: task ci
-      - name: acme-env up + ACME smoke test
-        run: task acme-env:e2e
+      - name: acme-env up + end-to-end test
+        run: |
+          task acme-env:up
+          task acme-env:check
       - name: talos-cluster up + verify
         run: task talos-cluster:up
       - name: Diagnostics
@@ -40,5 +42,5 @@ jobs:
       - name: Tear down
         if: always()
         run: |
-          task talos-cluster:down || true
+          task --yes talos-cluster:down || true
           task acme-env:down || true

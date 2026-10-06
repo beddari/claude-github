@@ -1,103 +1,75 @@
-# Monorepo entry point — https://taskfile.dev
-# `task --list` shows root tasks plus every project's tasks as <project>:<task>.
-# Everything here runs on Go + Task; repo plumbing lives in infra/drawer.
-version: '3'
-
-vars:
-  DRAWER: go run ./infra/drawer
-  PORT: '{{.PORT | default "8000"}}'
+# The repository's tasks. Each project's tasks are listed as <project>:<task>.
+# A task with any logic calls a script in bin/; see README.md.
+version: "3"
 
 tasks:
+  # Plain "task" lists the tasks. It has no description, so it is not listed.
   default:
-    desc: List all tasks
     silent: true
     cmds:
-      - '{{.TASK_EXE}} --list'
+      - task --list
 
   tools:
-    desc: Install host tools from the Brewfile (macOS + Linuxbrew)
-    preconditions:
-      - sh: command -v brew
-        msg: "Homebrew not found — see https://brew.sh (works on Linux too)"
+    desc: Install the tools in the Brewfile (macOS, or Linux with Homebrew)
     cmds:
       - brew bundle --file Brewfile
 
-  serve:
-    desc: Serve the repo as-is (drawer + apps) at http://127.0.0.1:PORT/
+  ci:
+    desc: Check the drawer's index and the docs' links, then run every project's ci. What CI runs
+    silent: true
     cmds:
-      - '{{.DRAWER}} serve -port {{.PORT}} .'
+      - bin/ci
+
+  lint:
+    desc: Run shellcheck on every bin/ folder and the session hook
+    silent: true
+    cmds:
+      - bin/lint
+
+  index-check:
+    desc: Check that wires.json lists every project under apps/, tools/ and labs/
+    cmds:
+      - go run ./infra/drawer check
+
+  docs-check:
+    desc: Check that every relative link in every markdown file points to a file and heading that exist
+    cmds:
+      - go run ./infra/drawer docs
+
+  wire-add:
+    desc: 'Add a project to the drawer: task wire-add -- NAME PATH app|tool|lab "what it does"'
+    cmds:
+      - go run ./infra/drawer add {{.CLI_ARGS}}
+
+  new-go:
+    desc: 'Create a Go CLI at tools/NAME and register it everywhere: task new-go -- NAME "what it does"'
+    silent: true
+    cmds:
+      - bin/new-go {{.CLI_ARGS}}
+
+  serve:
+    desc: Serve the repository as it is (drawer and apps) at http://127.0.0.1:8000/
+    cmds:
+      - go run ./infra/drawer serve -port 8000 .
 
   site:
-    desc: Build the GitHub Pages site into _site/ (what the pages workflow publishes)
+    desc: Build the GitHub Pages site into _site/, as the pages workflow does
     cmds:
-      - '{{.DRAWER}} site'
+      - go run ./infra/drawer site
 
-  site:serve:
-    desc: Build _site/ and preview it at http://127.0.0.1:PORT/
-    deps: [site]
+  site-serve:
+    desc: Build _site/ and serve it at http://127.0.0.1:8000/
     cmds:
-      - '{{.DRAWER}} serve -port {{.PORT}} _site'
-
-  index:check:
-    desc: Check wires.json lists every project under apps/, tools/ and labs/ (the drawer's index)
-    cmds:
-      - '{{.DRAWER}} check'
-
-  wire:add:
-    desc: 'Add a project to the drawer: task wire:add NAME=x PATH=apps/x KIND=app BLURB="what it does"'
-    requires:
-      vars: [NAME, PATH, KIND, BLURB]
-    cmds:
-      - '{{.DRAWER}} add "{{.NAME}}" "{{.PATH}}" "{{.KIND}}" "{{.BLURB}}"'
-
-  ci:
-    desc: Check the drawer index, then run `ci` in every project under infra/, apps/, tools/ and labs/
-    cmds:
-      - task: index:check
-      - |
-        set -e
-        for d in infra/*/ apps/*/ tools/*/ labs/*/; do
-          [ -f "$d/Taskfile.yml" ] || continue
-          echo "==> $d"
-          '{{.TASK_EXE}}' -d "$d" ci
-        done
+      - go run ./infra/drawer site
+      - go run ./infra/drawer serve -port 8000 _site
 
   clean:
-    desc: Remove _site/ and run `clean` in every project that defines it
+    desc: Remove _site/ and run every project's clean task
+    silent: true
     cmds:
-      - rm -rf _site
-      - |
-        for d in apps/*/ tools/*/; do
-          [ -f "$d/Taskfile.yml" ] && '{{.TASK_EXE}}' -d "$d" clean 2>/dev/null || true
-        done
+      - bin/clean
 
-  new:go:
-    desc: 'Scaffold a Go CLI at tools/NAME from templates/go-cli (task new:go NAME=my-tool BLURB="what it does")'
-    requires:
-      vars: [NAME]
-    preconditions:
-      - sh: echo '{{.NAME}}' | grep -Eq '^[a-z][a-z0-9-]*$'
-        msg: NAME must be lowercase letters, digits and hyphens
-      - sh: '[ ! -e tools/{{.NAME}} ]'
-        msg: tools/{{.NAME}} already exists
-    cmds:
-      - mkdir -p tools/{{.NAME}}
-      - |
-        for f in templates/go-cli/*.tmpl; do
-          b=$(basename "$f" .tmpl)
-          [ "$b" = gitignore ] && b=.gitignore
-          sed 's/__NAME__/{{.NAME}}/g' "$f" > "tools/{{.NAME}}/$b"
-        done
-      - go work use ./tools/{{.NAME}}
-      - |
-        {{.DRAWER}} add '{{.NAME}}' 'tools/{{.NAME}}' tool '{{.BLURB | default "TODO describe this wire"}}'
-      # Register the project's tasks as {{.NAME}}:<task>; relies on `includes:` being the last key in this file.
-      - |
-        printf '  %s:\n    taskfile: tools/%s/Taskfile.yml\n    dir: tools/%s\n' '{{.NAME}}' '{{.NAME}}' '{{.NAME}}' >> Taskfile.yml
-      - '{{.TASK_EXE}} -d tools/{{.NAME}} ci'
-      - 'echo "created tools/{{.NAME}} — try: task {{.NAME}}:run"'
-
-# Keep `includes:` last: `task new:go` appends new projects to the end of this file.
+# Keep includes: last. bin/new-go appends new projects to the end of this file.
 includes:
   drawer:
     taskfile: infra/drawer/Taskfile.yml

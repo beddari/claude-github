@@ -1,222 +1,100 @@
-# acme-env: split-DNS + internal ACME CA for local clusters, on podman.
-#   etcd     record store external-dns writes to (CoreDNS etcd/SkyDNS format)
-#   coredns  serves ZONE from etcd (+ ca.ZONE), forwards the rest upstream
-#   step-ca  internal CA with an ACME provisioner; validates HTTP-01 through CoreDNS
-# All three use host networking on unprivileged ports from ../lab.env.
-version: '3'
-
-vars:
-  PODMAN: '{{.PODMAN | default "podman"}}'
-  PREFIX: acme-env
-  ZONE: {sh: . ../lab.env && echo "$ZONE"}
-  DNS_PORT: {sh: . ../lab.env && echo "$DNS_PORT"}
-  CA_PORT: {sh: . ../lab.env && echo "$CA_PORT"}
-  ETCD_PORT: {sh: . ../lab.env && echo "$ETCD_PORT"}
-  ETCD_PEER_PORT: {sh: . ../lab.env && echo "$ETCD_PEER_PORT"}
-  UPSTREAM_DNS: {sh: . ../lab.env && echo "$UPSTREAM_DNS"}
-  HOST_IP: {sh: ../lab-host-ip.sh}
-  CA_NAME: Lab Internal CA
-  IMG_STEP_CA: docker.io/smallstep/step-ca:0.30.2
-  IMG_COREDNS: docker.io/coredns/coredns:1.14.7
-  IMG_ETCD: quay.io/coreos/etcd:v3.7.2
-  IMG_LEGO: docker.io/goacme/lego:v5.5.2
-  ACME_URL: 'https://{{.HOST_IP}}:{{.CA_PORT}}/acme/acme/directory'
-  RUN: '{{.TASKFILE_DIR}}/.run'
+# acme-env: split DNS and an internal ACME CA for local clusters, in podman.
+# Each task calls a script in bin/; see README.md.
+version: "3"
 
 tasks:
+  # Plain "task" lists the tasks. It has no description, so it is not listed.
   default:
-    desc: Show the lab's settings and container status
-    cmds:
-      - task: env
-      - task: status
-
-  env:
-    desc: Print the resolved settings (HOST_IP, ports, ACME directory)
     silent: true
     cmds:
-      - |
-        cat <<EOT
-        zone          {{.ZONE}}
-        host ip       {{.HOST_IP}}
-        dns           {{.HOST_IP}}:{{.DNS_PORT}}
-        etcd          http://{{.HOST_IP}}:{{.ETCD_PORT}}
-        acme          https://ca.{{.ZONE}}:{{.CA_PORT}}/acme/acme/directory  (also {{.ACME_URL}})
-        root cert     {{.RUN}}/root_ca.crt
-        EOT
+      - task --list
 
   up:
-    desc: Start etcd, CoreDNS and step-ca (initialises the CA on first run)
-    deps: [ca:init, render]
+    desc: Start etcd, CoreDNS and step-ca; creates the CA on the first run
+    silent: true
     cmds:
-      - >-
-        {{.PODMAN}} run -d --http-proxy=false --replace --name {{.PREFIX}}-etcd --network host
-        --label lab={{.PREFIX}} -v {{.PREFIX}}-etcd:/var/lib/etcd {{.IMG_ETCD}}
-        etcd --name {{.PREFIX}} --data-dir /var/lib/etcd
-        --listen-client-urls http://0.0.0.0:{{.ETCD_PORT}}
-        --advertise-client-urls http://{{.HOST_IP}}:{{.ETCD_PORT}}
-        --listen-peer-urls http://127.0.0.1:{{.ETCD_PEER_PORT}}
-        --initial-advertise-peer-urls http://127.0.0.1:{{.ETCD_PEER_PORT}}
-        --initial-cluster {{.PREFIX}}=http://127.0.0.1:{{.ETCD_PEER_PORT}}
-      - >-
-        {{.PODMAN}} run -d --http-proxy=false --replace --name {{.PREFIX}}-dns --network host
-        --label lab={{.PREFIX}} -v {{.RUN}}/Corefile:/etc/coredns/Corefile:ro,Z {{.IMG_COREDNS}}
-        -conf /etc/coredns/Corefile
-      - >-
-        {{.PODMAN}} run -d --http-proxy=false --replace --name {{.PREFIX}}-ca --network host
-        --label lab={{.PREFIX}} -v {{.PREFIX}}-ca:/home/step {{.IMG_STEP_CA}}
-        step-ca /home/step/config/ca.json --password-file /home/step/secrets/password
-        --resolver 127.0.0.1:{{.DNS_PORT}}
-      - task: wait
-      - task: root
-      - task: env
-
-  render:
-    desc: Render .run/Corefile from Corefile.tmpl and ../lab.env
-    sources: [Corefile.tmpl, ../lab.env]
-    generates: [.run/Corefile]
-    cmds:
-      - mkdir -p {{.RUN}}
-      - >-
-        sed -e 's/__ZONE__/{{.ZONE}}/g' -e 's/__DNS_PORT__/{{.DNS_PORT}}/g'
-        -e 's/__HOST_IP__/{{.HOST_IP}}/g' -e 's/__ETCD_PORT__/{{.ETCD_PORT}}/g'
-        -e 's/__UPSTREAM_DNS__/{{.UPSTREAM_DNS}}/g' Corefile.tmpl > {{.RUN}}/Corefile
-
-  ca:init:
-    desc: Create the CA (root, intermediate, ACME provisioner) in the {{.PREFIX}}-ca volume, once
-    status:
-      - '{{.PODMAN}} run --rm -v {{.PREFIX}}-ca:/home/step {{.IMG_STEP_CA}} test -f /home/step/config/ca.json'
-    cmds:
-      - >-
-        {{.PODMAN}} run --rm -v {{.PREFIX}}-ca:/home/step {{.IMG_STEP_CA}} sh -ec '
-        mkdir -p /home/step/secrets;
-        head -c 32 /dev/urandom | base64 > /home/step/secrets/password;
-        step ca init --deployment-type standalone --name "{{.CA_NAME}}"
-        --dns "ca.{{.ZONE}},{{.HOST_IP}},localhost,127.0.0.1" --address ":{{.CA_PORT}}"
-        --provisioner "admin@{{.ZONE}}" --acme
-        --password-file /home/step/secrets/password
-        --provisioner-password-file /home/step/secrets/password'
-
-  wait:
-    desc: Wait until step-ca answers on /health
-    cmds:
-      - |
-        for i in $(seq 1 60); do
-          curl -fsk --noproxy '*' https://127.0.0.1:{{.CA_PORT}}/health >/dev/null 2>&1 && exit 0
-          sleep 1
-        done
-        echo "step-ca did not become healthy; see: task logs" >&2; exit 1
-
-  root:
-    desc: Export the CA root certificate to .run/root_ca.crt and print its fingerprint
-    cmds:
-      - mkdir -p {{.RUN}}
-      - '{{.PODMAN}} run --rm -v {{.PREFIX}}-ca:/home/step {{.IMG_STEP_CA}} cat /home/step/certs/root_ca.crt > {{.RUN}}/root_ca.crt'
-      - '{{.PODMAN}} run --rm -v {{.PREFIX}}-ca:/home/step {{.IMG_STEP_CA}} step certificate fingerprint /home/step/certs/root_ca.crt'
-
-  trust:
-    desc: Trust the CA root on this machine (step CLI; asks for sudo)
-    deps: [root]
-    preconditions:
-      - sh: command -v step
-        msg: "step CLI not found — run `task tools` at the repo root (brew bundle)"
-    cmds:
-      - step certificate install {{.RUN}}/root_ca.crt
-
-  untrust:
-    desc: Remove the CA root from this machine's trust store
-    cmds:
-      - step certificate uninstall {{.RUN}}/root_ca.crt
-
-  record:add:
-    desc: 'Add an A record in the zone: task record:add NAME=foo IP=10.5.0.3'
-    requires:
-      vars: [NAME, IP]
-    cmds:
-      - >-
-        {{.PODMAN}} exec {{.PREFIX}}-etcd etcdctl --endpoints http://127.0.0.1:{{.ETCD_PORT}}
-        put "$(echo '{{.NAME}}.{{.ZONE}}' | awk -F. '{for (i = NF; i > 0; i--) printf "/%s", $i}' | sed 's#^#/skydns#')"
-        '{"host":"{{.IP}}","ttl":30}'
-
-  record:rm:
-    desc: 'Remove a record: task record:rm NAME=foo'
-    requires:
-      vars: [NAME]
-    cmds:
-      - >-
-        {{.PODMAN}} exec {{.PREFIX}}-etcd etcdctl --endpoints http://127.0.0.1:{{.ETCD_PORT}}
-        del --prefix "$(echo '{{.NAME}}.{{.ZONE}}' | awk -F. '{for (i = NF; i > 0; i--) printf "/%s", $i}' | sed 's#^#/skydns#')"
-
-  records:
-    desc: List every record in etcd (what external-dns has published)
-    cmds:
-      - '{{.PODMAN}} exec {{.PREFIX}}-etcd etcdctl --endpoints http://127.0.0.1:{{.ETCD_PORT}} get --prefix /skydns'
-
-  dig:
-    desc: 'Resolve a name through the lab CoreDNS: task dig NAME=ca'
-    vars:
-      NAME: '{{.NAME | default "ca"}}'
-    preconditions:
-      - sh: command -v dig
-        msg: "dig not found — run `task tools` at the repo root (brew bundle installs bind)"
-    cmds:
-      - dig @127.0.0.1 -p {{.DNS_PORT}} +short {{.NAME}}.{{.ZONE}}
-
-  smoke:
-    desc: 'End-to-end ACME check: publish smoke.ZONE, get a cert over HTTP-01 with lego (binds :80), verify the issuer'
-    preconditions:
-      - sh: test -f {{.RUN}}/root_ca.crt
-        msg: "acme-env is not up — run: task up"
-    cmds:
-      - task: record:add
-        vars: {NAME: smoke, IP: '{{.HOST_IP}}'}
-      - defer: {task: record:rm, vars: {NAME: smoke}}
-      - '{{.PODMAN}} run --rm --user 0 --entrypoint rm -v {{.RUN}}:/lab:Z {{.IMG_STEP_CA}} -rf /lab/lego'
-      - >-
-        {{.PODMAN}} run --rm --http-proxy=false --network host -v {{.RUN}}:/lab:Z
-        -e LEGO_CA_CERTIFICATES=/lab/root_ca.crt {{.IMG_LEGO}}
-        run --server {{.ACME_URL}} --accept-tos --email smoke@{{.ZONE}}
-        --domains smoke.{{.ZONE}} --http --http.address :80 --path /lab/lego
-      # Inspect + verify inside a container as root: lego's files may be root-only (rootful podman).
-      - >-
-        {{.PODMAN}} run --rm --user 0 --entrypoint sh -v {{.RUN}}:/lab:Z,ro {{.IMG_STEP_CA}} -ec '
-        step certificate inspect --short /lab/lego/certificates/smoke.{{.ZONE}}.crt;
-        step certificate verify /lab/lego/certificates/smoke.{{.ZONE}}.crt --roots /lab/root_ca.crt --host smoke.{{.ZONE}}'
-      - echo "smoke OK — step-ca issued smoke.{{.ZONE}} over HTTP-01 via CoreDNS"
+      - bin/up
 
   status:
-    desc: Show the lab containers
+    desc: List the services, their addresses and whether each one answers
+    silent: true
     cmds:
-      - '{{.PODMAN}} ps -a --filter label=lab={{.PREFIX}} --format "table {{"{{"}}.Names{{"}}"}}\t{{"{{"}}.Status{{"}}"}}\t{{"{{"}}.Image{{"}}"}}"'
+      - bin/status
+
+  check:
+    desc: "Run the end-to-end test: a certificate for smoke.<zone> over HTTP-01 (binds port 80)"
+    silent: true
+    cmds:
+      - bin/check
+
+  root:
+    desc: Copy the CA's root certificate to .run/root_ca.crt and print its fingerprint
+    silent: true
+    cmds:
+      - bin/root
+
+  trust:
+    desc: Add the CA's root to this computer's trust store (step CLI, asks for sudo)
+    silent: true
+    cmds:
+      - bin/trust
+
+  untrust:
+    desc: Remove the CA's root from this computer's trust store
+    silent: true
+    cmds:
+      - bin/untrust
+
+  record-add:
+    desc: "Add an A record to the zone: task acme-env:record-add -- NAME IP"
+    silent: true
+    cmds:
+      - bin/record-add {{.CLI_ARGS}}
+
+  record-rm:
+    desc: "Remove a name from the zone: task acme-env:record-rm -- NAME"
+    silent: true
+    cmds:
+      - bin/record-rm {{.CLI_ARGS}}
+
+  records:
+    desc: List every record in etcd, as external-dns and record-add wrote them
+    silent: true
+    cmds:
+      - bin/records
+
+  dig:
+    desc: "Resolve a name in the zone through the lab's CoreDNS: task acme-env:dig -- NAME"
+    silent: true
+    cmds:
+      - bin/dig {{.CLI_ARGS}}
 
   logs:
-    desc: 'Follow logs: task logs C=ca|dns|etcd'
-    vars:
-      C: '{{.C | default "ca"}}'
+    desc: "Follow a container's log: task acme-env:logs -- ca, dns or etcd"
+    silent: true
     cmds:
-      - '{{.PODMAN}} logs -f {{.PREFIX}}-{{.C}}'
+      - bin/logs {{.CLI_ARGS}}
 
   down:
-    desc: Stop and remove the containers (keeps the CA and records)
+    desc: Stop the containers, keep the CA and the records
+    silent: true
     cmds:
-      - '{{.PODMAN}} rm -f {{.PREFIX}}-ca {{.PREFIX}}-dns {{.PREFIX}}-etcd'
+      - bin/down
 
-  nuke:
-    desc: down + delete the CA and record volumes (you'll need to re-trust the new root)
+  destroy:
+    desc: Delete the containers, the CA and the records
+    prompt: Delete the CA and every record? Its root has to be trusted again.
+    silent: true
     cmds:
-      - task: down
-      - '{{.PODMAN}} volume rm -f {{.PREFIX}}-ca {{.PREFIX}}-etcd'
-      - 'test ! -d {{.RUN}} || {{.PODMAN}} run --rm --user 0 --entrypoint rm -v {{.RUN}}:/lab:Z {{.IMG_STEP_CA}} -rf /lab/lego'
-      - rm -rf {{.RUN}}
-
-  e2e:
-    desc: up → smoke (what CI runs; leaves the lab running)
-    cmds:
-      - task: up
-      - task: smoke
+      - bin/destroy
 
   ci:
-    desc: Static checks that need no podman (render the Corefile)
+    desc: Render the Corefile and check it, with no podman needed
     cmds:
-      - task: render
-      - grep -q "ca.{{.ZONE}}" {{.RUN}}/Corefile
-      - echo "acme-env config OK"
+      - bin/render
+      - grep -q "ca.$(. ../lab.env; echo "$ZONE")" .run/Corefile
+
+  lint:
+    desc: Run shellcheck on the scripts
+    cmds:
+      - shellcheck -s bash -e SC2034,SC2154,SC1090,SC1091,SC2242 bin/* ../lab.sh

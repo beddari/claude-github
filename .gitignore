@@ -1,5 +1,4 @@
-# Build output and task caches, anywhere in the tree
-bin/
+# Task caches, anywhere in the tree. Go tools ignore their own /bin/.
 .task/
 # Reports written by `task skill-audit:*` when run from the repo root
 /prompts/
