@@ -25,6 +25,7 @@ func repo(t *testing.T) string {
 		}
 	}
 	write("index.html", "<h1>drawer</h1>")
+	write("assets/bg.webp", "img")
 	write("wires.json", `{"repo":"https://example.com/r","wires":[
   {"name":"app-one","path":"apps/app-one","kind":"app","blurb":"An app.","href":"apps/app-one/"},
   {"name":"tool-one","path":"tools/tool-one","kind":"tool","blurb":"A tool.","href":"tools/tool-one/"}]}`)
@@ -120,7 +121,7 @@ func TestSite(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "site")
 	runOK(t, "-root", r, "site", out)
 	for _, f := range []string{
-		"index.html", "wires.json", ".nojekyll",
+		"index.html", "wires.json", ".nojekyll", "assets/bg.webp",
 		"apps/app-one/index.html", "apps/app-one/config.json",
 		"tools/tool-one/index.html", "tools/tool-one/dl/SHA256SUMS",
 		"tools/tool-one/dl/tool-one-darwin-arm64", "tools/tool-one/dl/tool-one-windows-amd64.exe",
