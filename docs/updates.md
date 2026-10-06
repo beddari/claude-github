@@ -10,7 +10,7 @@ alone, so that a failing check points at one cause.
 
 | Version | Where it is set | Applies | Checked by |
 |---|---|---|---|
-| step-ca, CoreDNS, etcd and lego images | `labs/acme-env/bin/functions.sh` | the next `task acme-env:up` or `check` | the `labs` workflow |
+| step-ca, CoreDNS, etcd, lego and BIND images | `labs/acme-env/bin/functions.sh` | the next `task acme-env:up` or `check` | the `labs` workflow |
 | cert-manager, external-dns and Traefik charts | `labs/talos-cluster/bin/functions.sh` | the next `task talos-cluster:up` | the `labs` workflow |
 | whoami image | `labs/talos-cluster/manifests/whoami.yaml.tmpl` | the next `task talos-cluster:demo` | the `labs` workflow |
 | Go | `go.mod` of each module; `go.work` is changed by hand | the next build | the `ci` workflow |
@@ -71,6 +71,7 @@ Some versions follow a stream, and what is installed is decided on the day:
 | `go install .../task@latest` in `ci.yml` and `pages.yml` | the newest Task |
 | `runs-on: ubuntu-latest` | GitHub's current Ubuntu image, with its podman, Docker and dig |
 | the chart versions | the images each chart release names |
+| `bind9:9.20` in `labs/acme-env/bin/functions.sh` | the newest BIND 9.20; ISC tags only the minor version |
 | `docker.io/library/alpine:3` in `task talos-cluster:debug` | the newest Alpine 3 |
 
 So two runs of the same commit a week apart can differ, and no pull request
