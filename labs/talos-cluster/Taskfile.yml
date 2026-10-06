@@ -96,15 +96,22 @@ tasks:
       - >-
         helm upgrade --install traefik traefik/traefik --version {{.TRAEFIK_VERSION}}
         -n traefik -f values/traefik.yaml
-        --set providers.kubernetesIngress.ingressEndpoint.ip={{.WORKER_IP}} --wait --timeout 5m
+        --set providers.kubernetesIngress.ingressEndpoint.ip={{.WORKER_IP}}
       - >-
         helm upgrade --install external-dns external-dns/external-dns --version {{.EXTERNAL_DNS_VERSION}}
         -n external-dns --create-namespace -f values/external-dns.yaml
         --set env[0].value=http://{{.HOST_IP}}:{{.ETCD_PORT}}
-        --set 'domainFilters[0]={{.ZONE}}' --set txtOwnerId={{.CLUSTER}} --wait --timeout 5m
+        --set 'domainFilters[0]={{.ZONE}}' --set txtOwnerId={{.CLUSTER}}
       - >-
         helm upgrade --install cert-manager jetstack/cert-manager --version {{.CERT_MANAGER_VERSION}}
-        -n cert-manager --create-namespace -f values/cert-manager.yaml --wait --timeout 5m
+        -n cert-manager --create-namespace -f values/cert-manager.yaml
+      # Wait on the workloads themselves rather than `helm --wait`, which timed out
+      # on Traefik in CI even though its pod was Ready.
+      - kubectl -n traefik rollout status daemonset/traefik --timeout=5m
+      - kubectl -n external-dns rollout status deployment/external-dns --timeout=5m
+      - kubectl -n cert-manager rollout status deployment/cert-manager --timeout=5m
+      - kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=5m
+      - kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --timeout=5m
 
   render:
     desc: Render manifests/*.tmpl into .run/ (zone, CA port, CA bundle)
@@ -155,6 +162,8 @@ tasks:
   status:
     desc: Nodes, lab workloads and certificates
     cmds:
+      - helm version --short
+      - helm list -A
       - kubectl get nodes -o wide
       - kubectl get pods -A -o wide --field-selector=metadata.namespace!=kube-system
       - kubectl get ingress,certificate -A
@@ -163,6 +172,8 @@ tasks:
     desc: Dump nodes, pods, events and recent logs for the lab namespaces (for when up/verify fails)
     ignore_error: true
     cmds:
+      - helm version --short
+      - helm list -A
       - kubectl get nodes -o wide
       - kubectl get pods -A -o wide
       - |
