@@ -73,13 +73,16 @@ tasks:
       - kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
   dns:forward:
-    desc: Make in-cluster CoreDNS forward the lab zone to acme-env's CoreDNS (idempotent)
+    desc: Make in-cluster CoreDNS forward the lab zone to acme-env's CoreDNS (idempotent; replaces an older block)
     cmds:
       - |
         set -e
+        block=$(printf '{{.ZONE}}:53 {\n    errors\n    cache 5\n    forward . {{.HOST_IP}}:{{.DNS_PORT}} {\n        force_tcp\n    }\n}')
         cur=$(kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}')
-        if printf '%s\n' "$cur" | grep -q '^{{.ZONE}}:53'; then echo "coredns already forwards {{.ZONE}}"; exit 0; fi
-        new=$(printf '%s\n\n{{.ZONE}}:53 {\n    errors\n    cache 5\n    forward . {{.HOST_IP}}:{{.DNS_PORT}}\n}\n' "$cur")
+        if printf '%s\n' "$cur" | grep -qF "$(printf '%s' "$block" | sed -n 4p)"; then echo "coredns already forwards {{.ZONE}} over TCP"; exit 0; fi
+        # Drop any previous block for the zone, then append the current one.
+        base=$(printf '%s\n' "$cur" | awk '/^{{.ZONE}}:53 \{/ {skip=1} !skip {print} skip && /^\}/ {skip=0}')
+        new=$(printf '%s\n\n%s\n' "$base" "$block")
         kubectl -n kube-system patch cm coredns --type merge -p "$(jq -n --arg c "$new" '{data: {Corefile: $c}}')"
         kubectl -n kube-system rollout restart deploy/coredns
         kubectl -n kube-system rollout status deploy/coredns --timeout=120s
@@ -187,6 +190,14 @@ tasks:
           kubectl -n "$ns" logs --all-containers --prefix --tail=40 -l 'app.kubernetes.io/instance' 2>/dev/null | tail -60
         done
       - kubectl get ingress,certificate,certificaterequest,order,challenge -A 2>/dev/null
+      - echo "=== cluster CoreDNS config + logs"
+      - kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}'
+      - kubectl -n kube-system logs -l k8s-app=kube-dns --tail=20 --prefix
+      - echo "=== acme-env DNS from the cluster's Docker network (UDP, then TCP)"
+      - >-
+        {{.DOCKER}} run --rm --network {{.CLUSTER}} docker.io/library/alpine:3 sh -c
+        'apk add -q bind-tools >/dev/null && dig @{{.HOST_IP}} -p {{.DNS_PORT}} +time=3 +tries=1 +short ca.{{.ZONE}};
+        dig @{{.HOST_IP}} -p {{.DNS_PORT}} +tcp +time=3 +tries=1 +short ca.{{.ZONE}}'
 
   down:
     desc: Remove the demo (so external-dns deletes its records), then destroy the cluster
