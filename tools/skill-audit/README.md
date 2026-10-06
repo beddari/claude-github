@@ -6,7 +6,7 @@ make the fixes. It's a single binary with no dependencies beyond the Go
 standard library.
 
 ```sh
-task install          # or: go build -o bin/skill-audit .
+task skill-audit:install    # from the repo root, or: go build -o bin/skill-audit . in this folder
 skill-audit           # audits ~/.claude/skills and ./.claude/skills
 skill-audit path/to/skills path/to/one-skill path/to/SKILL.md
 skill-audit -prompt > fix.md      # a Claude prompt covering every skill that needs work
@@ -36,13 +36,14 @@ manual review items.
 
 ## Taskfile
 
-`task --list` shows every target. The main ones:
+Run these from the repo root (`task --list` shows them all). Inside this
+folder, drop the `skill-audit:` prefix.
 
-- `task`: runs vet, tests, build and the fixture self-check, then audits your skills
-- `task audit SKILLS="dir1 dir2"`: audits specific folders; pass flags with `task audit -- -v`
-- `task prompt` / `task prompts`: prints one combined fix prompt, or writes one `prompts/<skill>.prompt.md` per skill
-- `task fix`: starts `claude` with the fix prompt as the first message
-- `task audit:md` / `task audit:json`: writes the report as markdown or JSON
+- `task skill-audit:ci`: vet, tests, build, and a self-check against the bundled good/bad sample skills
+- `task skill-audit:audit SKILLS="dir1 dir2"`: audits specific folders (relative to where you run `task`); pass flags with `-- -v`
+- `task skill-audit:prompt` / `task skill-audit:prompts`: prints one combined fix prompt, or writes one `prompts/<skill>.prompt.md` per skill
+- `task skill-audit:fix`: starts `claude` with the fix prompt as the first message
+- `task skill-audit:audit:md` / `task skill-audit:audit:json`: writes the report as markdown or JSON
 
 ## Flags
 

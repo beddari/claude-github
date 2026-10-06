@@ -1,0 +1,17 @@
+version: '3'
+
+# Paths are relative to this folder; vars stay task-local so they never
+# clash with the root Taskfile's when included.
+tasks:
+  serve:
+    desc: Serve just this app at http://127.0.0.1:PORT/ (register that as a redirect URI in the Spotify dashboard)
+    vars:
+      PORT: '{{.PORT | default "8000"}}'
+    cmds:
+      - go run ../../infra/drawer serve -port {{.PORT}} .
+
+  ci:
+    desc: Check config.json parses and has a Spotify client ID
+    cmds:
+      - go run ../../infra/drawer json config.json spotify.clients.spillelista.clientId > /dev/null
+      - echo "config.json OK"

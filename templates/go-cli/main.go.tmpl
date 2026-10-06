@@ -1,0 +1,24 @@
+// Command __NAME__ is a new tool in the claude-github monorepo.
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"os"
+)
+
+func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+
+func run(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("__NAME__", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
+	}
+	fmt.Fprintln(stdout, "hello from __NAME__")
+	return 0
+}

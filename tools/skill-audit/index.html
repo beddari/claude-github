@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>skill-audit</title>
+  <meta name="description" content="A Go CLI that audits Claude skills against the updated skill-authoring guidance and writes the prompt to fix them." />
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --panel: #fffaf1;
+      --edge: #d8c9b2;
+      --text: #2b2420;
+      --muted: #6f6258;
+      --link: #1f5f8b;
+      --wire: #2f6db5;
+      --copper: #c27a3a;
+      --term-bg: #1d1f23;
+      --term-text: #e6e1d8;
+      --pass: #3b8a4a;
+      --warn: #b07a12;
+      --fail: #c8423b;
+      --info: #2f7f95;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #17181b;
+        --panel: #222429;
+        --edge: #3d4048;
+        --text: #ece6dd;
+        --muted: #a39a90;
+        --link: #8cc4ec;
+        --wire: #5f97da;
+        --copper: #d99252;
+        --term-bg: #0f1012;
+        --pass: #64b273;
+        --warn: #d9a63a;
+        --fail: #e0645c;
+        --info: #5fb3c9;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #17181b;
+      --panel: #222429;
+      --edge: #3d4048;
+      --text: #ece6dd;
+      --muted: #a39a90;
+      --link: #8cc4ec;
+      --wire: #5f97da;
+      --copper: #d99252;
+      --term-bg: #0f1012;
+      --pass: #64b273;
+      --warn: #d9a63a;
+      --fail: #e0645c;
+      --info: #5fb3c9;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+    a { color: var(--link); }
+    .back { font-size: .9rem; text-decoration: none; font-weight: 600; }
+    .wire { display: block; height: 10px; margin: 20px 0 8px; width: 70%;
+      background: linear-gradient(90deg, var(--copper) 0 3%, var(--wire) 3% 97%, var(--copper) 97%);
+      border-radius: 5px; }
+    h1 { font: 700 clamp(1.8rem, 5vw, 2.4rem)/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0 0 8px; letter-spacing: -0.02em; }
+    .lede { color: var(--muted); max-width: 62ch; margin: 0 0 24px; }
+    h2 { font-size: 1.2rem; margin: 40px 0 12px; }
+    p { max-width: 68ch; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+    pre {
+      background: var(--term-bg); color: var(--term-text); padding: 14px 16px; border-radius: 8px;
+      overflow-x: auto; font: .82rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0;
+    }
+    pre .p { color: #7fc98b; } pre .w { color: #e3b75a; } pre .f { color: #ef7d75; } pre .i { color: #74c3d6; } pre .d { color: #8b857c; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--edge); border-radius: 8px; background: var(--panel); }
+    table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+    th, td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--edge); vertical-align: top; }
+    thead th { border-top: 0; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    td:first-child { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .downloads { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .downloads a {
+      padding: 6px 12px; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel);
+      text-decoration: none; font: 600 .85rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .note { color: var(--muted); font-size: .9rem; }
+    .pill { font-weight: 700; }
+    .pill.fail { color: var(--fail); } .pill.warn { color: var(--warn); } .pill.pass { color: var(--pass); }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="../../">← Back to the drawer</a>
+    <span class="wire" aria-hidden="true"></span>
+    <h1>skill-audit</h1>
+    <p class="lede">
+      A single Go binary that checks your Claude skills (folders with a
+      <code>SKILL.md</code>) against Anthropic's updated skill-authoring
+      guidance. It reports what's off and can write the prompt that asks
+      Claude to fix it, plan first.
+    </p>
+
+    <h2>Why</h2>
+    <p>
+      Skills written early on followed the original advice: a good description,
+      a short SKILL.md, references split out. The guidance has since grown.
+      Claude previews long reference files with <code>head -100</code>, so
+      anything important below line 100 with no contents list may never be
+      read. References nested two levels deep only get partially read. Risky
+      steps belong in scripts, not prose. Most of the fixes are about how the
+      files are laid out and which checks they run, not the wording, which
+      makes them something a tool can find.
+    </p>
+
+    <h2>What it checks</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>check</th><th>rule</th></tr></thead>
+        <tbody>
+          <tr><td>frontmatter</td><td>Valid <code>name</code>, plus a third-person <code>description</code> that says when to use the skill</td></tr>
+          <tr><td>length</td><td>SKILL.md body under 500 lines; it's the contents page for everything else</td></tr>
+          <tr><td>contents</td><td>Reference files over 100 lines start with a contents list that matches their headings</td></tr>
+          <tr><td>nesting</td><td>Every reference is linked directly from SKILL.md (one level deep); flags orphans</td></tr>
+          <tr><td>links</td><td>Local links resolve</td></tr>
+          <tr><td>freedom</td><td>Risky steps (money, deleting, migrations, deploys) use an exact script, not loose prose</td></tr>
+          <tr><td>models</td><td>The models the skill was tested on are recorded in the frontmatter</td></tr>
+          <tr><td>emphasis</td><td>Not shouting ALL-CAPS MUST/NEVER/IMPORTANT, which newer models handle worse</td></tr>
+          <tr><td>checklist</td><td>Ordered workflows give Claude a <code>- [ ]</code> checklist to copy and tick off</td></tr>
+          <tr><td>feedback</td><td>Validation steps loop: check, fix, repeat until it passes</td></tr>
+          <tr><td>deps</td><td>Every package and CLI tool has an install line next to where it's used</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      The checks are pattern-based. Testing on Haiku, Sonnet and Opus, and
+      deciding how much freedom each step gets, can't be automated, so the
+      generated prompt lists them for manual review.
+    </p>
+
+    <h2>What it found on real skills</h2>
+    <p>
+      The first run covered 13 skills installed in a Claude Code cloud session. None of them
+      recorded tested models. A few findings stood out:
+    </p>
+    <ul>
+      <li><code>pdf</code> uses 17 packages and tools (pypdf, pdfplumber, poppler…) but has install lines for only two.</li>
+      <li><code>skill-creator</code> has four reference files over 100 lines with no contents list, and its SKILL.md is close to the 500-line limit.</li>
+      <li><code>docx</code> and <code>xlsx</code> ship a validator script but never say to fix the errors and validate again.</li>
+    </ul>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>skill</th><th class="num">pass</th><th class="num">info</th><th class="num">warn</th><th class="num">fail</th><th>needs work</th></tr></thead>
+        <tbody>
+          <tr><td>deep-research</td><td class="num">7</td><td class="num">0</td><td class="num">2</td><td class="num">1</td><td>contents, models, checklist</td></tr>
+          <tr><td>docx</td><td class="num">5</td><td class="num">0</td><td class="num">2</td><td class="num">1</td><td>models, feedback, deps</td></tr>
+          <tr><td>pdf</td><td class="num">7</td><td class="num">0</td><td class="num">1</td><td class="num">2</td><td>contents, models, deps</td></tr>
+          <tr><td>pptx</td><td class="num">7</td><td class="num">0</td><td class="num">2</td><td class="num">0</td><td>models, checklist</td></tr>
+          <tr><td>skill-creator</td><td class="num">7</td><td class="num">0</td><td class="num">3</td><td class="num">1</td><td>length, contents, models, checklist</td></tr>
+          <tr><td>xlsx</td><td class="num">5</td><td class="num">0</td><td class="num">2</td><td class="num">1</td><td>models, feedback, deps</td></tr>
+          <tr><td>7 others</td><td class="num">32</td><td class="num">6</td><td class="num">10</td><td class="num">0</td><td>models; frontmatter, checklist, feedback on some</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Sample report</h2>
+    <p>From the bundled <code>bad-skill</code> sample, which is written to break every rule:</p>
+<pre><span class="d">$ skill-audit testdata/bad-skill</span>
+Bad_Skill
+  <span class="f">FAIL</span>  contents    1 long reference file(s) without a contents list
+                    <span class="d">·</span> details.md (144 lines) has no contents list in its first 100 lines;
+                      2 emphasised rule(s) sit after line 100 and may never be seen
+  <span class="f">FAIL</span>  nesting     1 reference file(s) only reachable through another reference
+                    <span class="d">·</span> details.md is 2 levels deep: SKILL.md → advanced.md → details.md
+                    <span class="d">·</span> orphan.md is not linked from SKILL.md or any reference
+  <span class="w">WARN</span>  freedom     fragile operations mentioned (delete, payments, production, refunds)
+                    but no locked-down script or exact command
+                    <span class="d">·</span> SKILL.md:11 "2. Delete the customer's records in production."
+  <span class="w">WARN</span>  models      no tested/intended models recorded
+  <span class="f">FAIL</span>  deps        2 of 2 dependencies have no install instruction
+                    <span class="d">·</span> cli `jq` (install: jq) — first used at scripts/run.sh:2
+                    <span class="d">·</span> python `pandas` — first used at SKILL.md:25
+  <span class="d">…</span></pre>
+
+    <h2>Get it</h2>
+    <div class="downloads" id="downloads">
+      <a href="dl/skill-audit-linux-amd64">linux / amd64</a>
+      <a href="dl/skill-audit-linux-arm64">linux / arm64</a>
+      <a href="dl/skill-audit-darwin-arm64">macOS / Apple silicon</a>
+      <a href="dl/skill-audit-darwin-amd64">macOS / Intel</a>
+      <a href="dl/skill-audit-windows-amd64.exe">windows / amd64</a>
+    </div>
+    <p class="note">
+      Each download is built from <code>main</code> on every publish (checksums in
+      <a href="dl/SHA256SUMS">SHA256SUMS</a>). On macOS, run
+      <code>xattr -d com.apple.quarantine skill-audit-darwin-*</code> and
+      <code>chmod +x</code> it first. You can also build it yourself:
+    </p>
+<pre>go install github.com/beddari/claude-github/tools/skill-audit@main
+# or, from a clone:
+task skill-audit:install</pre>
+
+    <h2>Use it</h2>
+<pre><span class="d"># audit ~/.claude/skills and ./.claude/skills</span>
+skill-audit
+
+<span class="d"># specific folders, a single skill, or one SKILL.md</span>
+skill-audit ~/work/plugins/skills ./my-skill
+
+<span class="d"># a prompt for Claude: confirm each finding, show a plan, then fix</span>
+skill-audit -prompt &gt; fix.md
+skill-audit -prompt-dir prompts/      <span class="d"># one prompt per skill</span>
+
+<span class="d"># in CI: exit 1 on any fail</span>
+skill-audit -strict -format json</pre>
+
+    <p>
+      <a href="https://github.com/beddari/claude-github/tree/main/tools/skill-audit">Source on GitHub →</a>
+    </p>
+  </main>
+</body>
+</html>

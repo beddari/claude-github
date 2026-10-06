@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/beddari/claude-github/skill-audit/internal/audit"
+	"github.com/beddari/claude-github/tools/skill-audit/internal/audit"
 )
 
 const usage = `skill-audit — audit Claude skills against current best practice

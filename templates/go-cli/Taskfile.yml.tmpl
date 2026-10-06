@@ -1,0 +1,44 @@
+version: '3'
+
+tasks:
+  fmt:
+    desc: gofmt all sources
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: go vet and a gofmt check
+    cmds:
+      - go vet ./...
+      - 'test -z "$(gofmt -l .)" || (gofmt -l . && echo "unformatted files; run task fmt" && exit 1)'
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -race -count=1 ./...
+
+  build:
+    desc: Build the binary into bin/
+    sources: ['**/*.go', go.mod]
+    generates: [bin/__NAME__]
+    cmds:
+      - go build -trimpath -ldflags="-s -w" -o {{.TASKFILE_DIR}}/bin/__NAME__ .
+
+  run:
+    desc: Build and run (pass args after --)
+    deps: [build]
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - '{{.TASKFILE_DIR}}/bin/__NAME__ {{.CLI_ARGS}}'
+
+  ci:
+    desc: vet, test, build
+    cmds:
+      - task: vet
+      - task: test
+      - task: build
+
+  clean:
+    desc: Remove build output
+    cmds:
+      - rm -rf bin .task

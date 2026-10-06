@@ -1,0 +1,19 @@
+{
+  "repo": "https://github.com/beddari/claude-github",
+  "wires": [
+    {
+      "name": "spillelista",
+      "path": "apps/spillelista",
+      "kind": "app",
+      "blurb": "Spotify playlist page. Log in, pick a list, play.",
+      "href": "apps/spillelista/"
+    },
+    {
+      "name": "skill-audit",
+      "path": "tools/skill-audit",
+      "kind": "tool",
+      "blurb": "Go CLI that audits Claude skills against current best practice and writes the prompt to fix them.",
+      "href": "tools/skill-audit/"
+    }
+  ]
+}
