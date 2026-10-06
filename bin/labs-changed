@@ -14,7 +14,7 @@ source "${0%/*}/functions.sh" || exit $?
 function needs_labs()
 {
 	case "$1" in
-		labs/docs/*|labs/*.md)		return 1 ;;
+		labs/docs/*|labs/*.md|labs/*.html)	return 1 ;;
 		labs/*)				return 0 ;;
 		.github/workflows/labs.yml)	return 0 ;;
 		bin/labs-changed)		return 0 ;;
