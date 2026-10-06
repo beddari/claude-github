@@ -1,7 +1,7 @@
 name: pages
 
-# Publishes the drawer (index.html + wires.json), every app, and every tool
-# page with its binaries. One-time setup: Settings → Pages → Source: GitHub Actions.
+# Publishes the landing page, every app and every tool page with its
+# binaries. Pages' source must be GitHub Actions: docs/troubleshooting.md.
 on:
   push:
     branches: [main]

@@ -18,7 +18,7 @@ img_etcd="quay.io/coreos/etcd:v3.7.2"
 img_lego="docker.io/goacme/lego:v5.5.2"
 img_bind="docker.io/internetsystemsconsortium/bind9:9.20"
 
-# PODMAN="sudo podman" runs everything rootful, as CI does for port 80.
+# PODMAN="sudo podman" runs everything rootful: labs/acme-env/README.md.
 read -r -a podman <<< "${PODMAN:-podman}"
 
 host_ip="$(lab_host_ip)"
@@ -42,8 +42,7 @@ function in_ca()
 }
 
 #
-# Runs a shell command as root in a throwaway step-ca container that sees
-# .run/ at /lab. Files lego wrote with rootful podman are root's.
+# Runs a shell command as root in a throwaway container, with .run/ at /lab.
 #
 function in_run_dir()
 {

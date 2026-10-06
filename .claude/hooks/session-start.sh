@@ -39,8 +39,8 @@ function fetch_skills()
 }
 
 #
-# Symlinks every skill into the agent folders, with the repository's own
-# script, which leaves real folders and foreign symlinks alone.
+# Links every skill into the agent folders with the skills repository's
+# bin/link.
 #
 function link_skills()
 {

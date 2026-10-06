@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 #
-# Signs a CA for one cluster with the lab's root, so that everything the
-# cluster's CA issues chains to the root. Writes DIR/ca.crt and DIR/ca.key;
-# keeps them when they exist.
+# Signs a CA for one cluster with the lab's root: DIR/ca.crt and DIR/ca.key.
+# Keeps them when they exist.
 #
 # Usage: bin/cluster-ca NAME DIR
 #
 
 source "${0%/*}/functions.sh" || exit $?
 
-# A cluster lives for days, not years; the root lives for ten.
+# Five years, within the root's ten.
 validity="43800h"
 
 [[ $# -eq 2 ]] || fail "usage: task acme-env:cluster-ca -- NAME DIR"
@@ -21,8 +20,7 @@ dir="$2"
 log "Signing the CA of $cluster with the root of $ca_name ..."
 mkdir -p "$dir" || fail "Could not create $dir!"
 
-# The key never touches the CA's volume: step writes both files to a
-# temporary folder in the container, and tar hands them out on stdout.
+# The key stays out of the CA's volume.
 # shellcheck disable=SC2016
 (umask 077 && in_ca sh -ec '
 	out="$(mktemp -d)"

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
 # Installs Traefik, external-dns and cert-manager with Helm, then waits for
-# their workloads. "helm --wait" is not used: it hung on Traefik in CI while
-# the pod was Ready.
+# their workloads with kubectl rollout status: labs/docs/troubleshooting.md.
 #
 
 source "${0%/*}/functions.sh" || exit $?

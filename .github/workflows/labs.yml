@@ -1,12 +1,7 @@
 name: labs
 
-# End-to-end run of labs/: acme-env in podman, then a Talos cluster in Docker
-# that gets DNS records and certificates from it. It takes about 6 minutes, so
-# on a pull request it runs only when bin/labs-changed says the change needs
-# it; changes to the labs' docs do not. When it does not run, e2e is skipped,
-# which counts as passed, so e2e can be a required check. It does not run
-# again on main: with "require branches to be up to date", a pull request was
-# tested as main will be.
+# acme-env and talos-cluster end to end. e2e runs only when bin/labs-changed
+# says so: docs/updates.md.
 on:
   pull_request:
   workflow_dispatch:
@@ -32,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Rootful podman so the ACME smoke test can bind port 80.
+      # Rootful podman: task acme-env:check binds port 80.
       PODMAN: sudo podman
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +43,7 @@ jobs:
           task acme-env:check
       - name: talos-cluster up + verify
         run: |
-          # Lets a pod reach a service whose pod is on the same node.
+          # br_netfilter: labs/docs/troubleshooting.md.
           sudo modprobe br_netfilter
           task talos-cluster:up
       - name: Diagnostics

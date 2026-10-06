@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
 # Prints true when the changes from BASE to HEAD need the labs' end-to-end
-# run, and false when they do not. Their docs do not; their scripts,
-# templates, values and workflow do.
+# run, false when they do not: docs/updates.md.
 #
 # Usage: bin/labs-changed [BASE [HEAD]]
 #

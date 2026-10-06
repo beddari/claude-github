@@ -1,6 +1,5 @@
-// Rendered by bin/render into .run/bind/named.conf. BIND is authoritative
-// for one zone, _acme-challenge.__ZONE__, where ACME clients put their
-// DNS-01 tokens with RFC 2136 updates. CoreDNS forwards the zone here.
+// Rendered by bin/render into .run/bind/named.conf. One zone, for DNS-01
+// tokens; CoreDNS forwards it here.
 options {
 	directory "/var/lib/bind";
 	listen-on port __DNS_UPDATE_PORT__ { any; };

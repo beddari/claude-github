@@ -1,9 +1,8 @@
-# skill-audit: a Go CLI. Its logic is Go, so the tasks are commands;
-# arguments go after --. See README.md.
+# skill-audit: a Go CLI. Arguments go after --: tools/skill-audit/README.md.
 version: "3"
 
 tasks:
-  # Plain "task" lists the tasks. It has no description, so it is not listed.
+  # Plain "task" lists the tasks.
   default:
     silent: true
     cmds:

@@ -1,4 +1,4 @@
-# Rendered by bin/render into .run/Corefile (__VARS__ come from ../lab.env).
+# Rendered by bin/render into .run/Corefile, with the settings of labs/lab.env.
 
 # The lab zone: ca.__ZONE__ is pinned to the host; everything else in the
 # zone is read from etcd, where external-dns (coredns provider) writes it.
@@ -22,8 +22,7 @@ __ZONE__:__DNS_PORT__ {
     errors
 }
 
-# DNS-01 challenges, as for a wildcard: BIND holds this one zone and takes
-# RFC 2136 updates for it, signed with TSIG. CoreDNS cannot take updates.
+# DNS-01 tokens, in BIND: labs/docs/troubleshooting.md.
 _acme-challenge.__ZONE__:__DNS_PORT__ {
     forward . 127.0.0.1:__DNS_UPDATE_PORT__
     errors

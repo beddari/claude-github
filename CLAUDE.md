@@ -32,6 +32,14 @@ The shape of https://git.dataverket.org/dataverket/incusdev-vm:
 - Repository plumbing is Go, in `infra/drawer`. No Python or Node.
 - Host tools come from the `Brewfile`.
 
+## Comments
+
+- State the choice a line makes, not what the code already says.
+- No history and no evidence of how it was found: the current stance only.
+- Reasons go in the docs; the comment points there by path from the root,
+  `labs/docs/troubleshooting.md`.
+- bash-style's one-line comment above each function stays.
+
 ## Docs
 
 Write docs as `docs/writing-docs.md` says, after incusdev-vm: plain short

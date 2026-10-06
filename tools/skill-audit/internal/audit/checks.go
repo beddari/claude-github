@@ -382,7 +382,7 @@ func checkFreedom(s *Skill, _ Options) Result {
 	high := false
 	for i, l := range body {
 		for _, loc := range fragileRe.FindAllStringIndex(l, -1) {
-			// "Never delete …" is a guardrail, not a fragile operation Claude performs.
+			// Skips guardrails such as "Never delete …".
 			if negatedRe.MatchString(lastWords(l[:loc[0]], 4)) {
 				continue
 			}

@@ -16,9 +16,8 @@ function indent()
 }
 
 #
-# Writes the config patches that give the cluster its CA: the control plane
-# issues from it, and every node accepts it alone in place of the CA that
-# talosctl generates.
+# Writes the Talos config patches that set the cluster's CA: the control
+# plane issues from it, and every node trusts it alone.
 #
 function ca_patches()
 {
@@ -46,8 +45,7 @@ function ca_patches()
 
 cluster_exists && exit 0
 
-# Without br_netfilter on a Linux host, a pod cannot reach a service whose
-# pod is on the same node: CI saw DNS lookups time out exactly then.
+# br_netfilter: labs/docs/troubleshooting.md.
 if [[ "$(uname -s)" == Linux && ! -e /proc/sys/net/bridge ]]; then
 	warn "br_netfilter is not loaded: sudo modprobe br_netfilter"
 fi
