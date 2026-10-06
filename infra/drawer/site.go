@@ -21,7 +21,7 @@ var targets = [][2]string{
 var skipInApps = map[string]bool{"bin": true, ".task": true, "Taskfile.yml": true, "README.md": true}
 
 // buildSite assembles the GitHub Pages site:
-//   - index.html + wires.json at the root (the drawer)
+//   - index.html + wires.json + assets/ at the root (the drawer)
 //   - apps/*  with an href: the whole folder (static, no build step)
 //   - tools/* with an href: only index.html; Go tools also get binaries + SHA256SUMS in dl/
 func buildSite(root, out string, log io.Writer) error {
@@ -37,6 +37,12 @@ func buildSite(root, out string, log io.Writer) error {
 	}
 	for _, f := range []string{"index.html", "wires.json"} {
 		if err := copyFile(filepath.Join(root, f), filepath.Join(out, f)); err != nil {
+			return err
+		}
+	}
+	// Shared static files for the landing page (e.g. the background photo).
+	if fi, err := os.Stat(filepath.Join(root, "assets")); err == nil && fi.IsDir() {
+		if err := copyTree(filepath.Join(root, "assets"), filepath.Join(out, "assets")); err != nil {
 			return err
 		}
 	}

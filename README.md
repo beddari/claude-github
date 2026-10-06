@@ -15,6 +15,7 @@ with no other runtimes.
 
 ```
 index.html           landing page (GitHub Pages root), rendered from wires.json
+assets/              shared static files for the landing page (background photo)
 wires.json           index of every experiment; `task ci` fails if one is missing
 apps/<name>/         web apps / sites, published as-is
 tools/<name>/        CLIs, one Go module each; an index.html makes it a published page with downloads
