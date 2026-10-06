@@ -170,14 +170,17 @@ tasks:
       - task: record:add
         vars: {NAME: smoke, IP: '{{.HOST_IP}}'}
       - defer: {task: record:rm, vars: {NAME: smoke}}
-      - rm -rf {{.RUN}}/lego
+      - '{{.PODMAN}} run --rm --user 0 --entrypoint rm -v {{.RUN}}:/lab:Z {{.IMG_STEP_CA}} -rf /lab/lego'
       - >-
         {{.PODMAN}} run --rm --http-proxy=false --network host -v {{.RUN}}:/lab:Z
         -e LEGO_CA_CERTIFICATES=/lab/root_ca.crt {{.IMG_LEGO}}
         run --server {{.ACME_URL}} --accept-tos --email smoke@{{.ZONE}}
         --domains smoke.{{.ZONE}} --http --http.address :80 --path /lab/lego
-      - openssl x509 -in {{.RUN}}/lego/certificates/smoke.{{.ZONE}}.crt -noout -issuer -enddate -ext subjectAltName
-      - openssl verify -CAfile {{.RUN}}/root_ca.crt -untrusted {{.RUN}}/lego/certificates/smoke.{{.ZONE}}.crt {{.RUN}}/lego/certificates/smoke.{{.ZONE}}.crt
+      # Inspect + verify inside a container as root: lego's files may be root-only (rootful podman).
+      - >-
+        {{.PODMAN}} run --rm --user 0 --entrypoint sh -v {{.RUN}}:/lab:Z,ro {{.IMG_STEP_CA}} -ec '
+        step certificate inspect --short /lab/lego/certificates/smoke.{{.ZONE}}.crt;
+        step certificate verify /lab/lego/certificates/smoke.{{.ZONE}}.crt --roots /lab/root_ca.crt --host smoke.{{.ZONE}}'
       - echo "smoke OK — step-ca issued smoke.{{.ZONE}} over HTTP-01 via CoreDNS"
 
   status:
@@ -202,6 +205,7 @@ tasks:
     cmds:
       - task: down
       - '{{.PODMAN}} volume rm -f {{.PREFIX}}-ca {{.PREFIX}}-etcd'
+      - 'test ! -d {{.RUN}} || {{.PODMAN}} run --rm --user 0 --entrypoint rm -v {{.RUN}}:/lab:Z {{.IMG_STEP_CA}} -rf /lab/lego'
       - rm -rf {{.RUN}}
 
   e2e:
