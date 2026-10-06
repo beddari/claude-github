@@ -46,30 +46,46 @@ sudo modprobe br_netfilter
 
 ```sh
 task acme-env:up            # the DNS and CA this cluster consumes
-task talos-cluster:up       # about 3 minutes; ends with verify
+task talos-cluster:up       # about 3.5 minutes; ends with verify
 export KUBECONFIG=$PWD/labs/talos-cluster/.run/kubeconfig
 ```
 
-`task talos-cluster:up` creates the cluster, installs the add-ons, the
-issuer and whoami, and ends with the end-to-end test. These lines are from a
-run on a GitHub runner, where `up` took 3 minutes 10 seconds:
+`task talos-cluster:up` creates the cluster with its CA, installs the
+add-ons, the issuer and the demos, and ends with the end-to-end test. These
+lines are from a run on a GitHub runner, where `up` took 3 minutes 32
+seconds:
 
 ```
+>>> The API server's certificate chains to the lab's root:
+subject=CN = acme-lab Kubernetes CA
+issuer=O = Lab Internal CA, CN = Lab Internal CA Root CA
 >>> A pod on acme-lab-controlplane-1 resolves ca.lab.test
 >>> A pod on acme-lab-worker-1 resolves ca.lab.test
 certificate.cert-manager.io/whoami-tls condition met
 >>> whoami.lab.test -> 10.5.0.3, published by external-dns
 curl: (60) SSL certificate problem: self-signed certificate
-Hostname: whoami-848b9bdb5-mc4zq
+Hostname: whoami-848b9bdb5-txbmf
 Host: whoami.lab.test
+X509v3 Subject Alternative Name: critical
+    DNS:whoami.lab.test
 issuer=O = Lab Internal CA, CN = Lab Internal CA Intermediate CA
-notAfter=Oct  7 12:48:51 2026 GMT
->>> All good: whoami.lab.test has a record from external-dns and a step-ca cert.
+notAfter=Oct  7 14:03:44 2026 GMT
+certificate.cert-manager.io/wildcard condition met
+>>> *.lab.test was issued over DNS-01
+curl: (60) SSL certificate problem: self-signed certificate
+Hostname: whoami-848b9bdb5-txbmf
+Host: hello.lab.test
+X509v3 Subject Alternative Name: critical
+    DNS:*.lab.test
+issuer=O = Lab Internal CA, CN = Lab Internal CA Intermediate CA
+notAfter=Oct  7 14:03:44 2026 GMT
+>>> All good: CA chain, whoami.lab.test over HTTP-01, *.lab.test over DNS-01.
 ```
 
-The `curl` error is Traefik still serving its own certificate; `verify`
-retries until it serves the new one, here 2 seconds later. From the Ingress
-to an issued certificate takes about 20 seconds.
+The `curl` errors are Traefik still serving its own certificate; `verify`
+retries until it serves the new one, here 2 seconds later. From the demo
+to an issued certificate took 19 seconds over HTTP-01 and 61 seconds over
+DNS-01, where cert-manager waits for the token to show up in DNS first.
 
 | Task | What it does |
 |---|---|
