@@ -53,10 +53,10 @@ func save(root string, ix *Index) error {
 	return os.WriteFile(filepath.Join(root, "wires.json"), buf.Bytes(), 0o644)
 }
 
-// projects lists apps/* and tools/* directories that have a Taskfile.
+// projects lists apps/*, tools/* and labs/* directories that have a Taskfile.
 func projects(root string) ([]string, error) {
 	var out []string
-	for _, parent := range []string{"apps", "tools"} {
+	for _, parent := range []string{"apps", "tools", "labs"} {
 		entries, err := os.ReadDir(filepath.Join(root, parent))
 		if os.IsNotExist(err) {
 			continue
@@ -77,6 +77,8 @@ func projects(root string) ([]string, error) {
 	return out, nil
 }
 
+func validKind(k string) bool { return k == "app" || k == "tool" || k == "lab" }
+
 func isLocal(href string) bool { return href != "" && !strings.Contains(href, "://") }
 
 // check returns the number of wires and every problem found.
@@ -94,8 +96,8 @@ func check(root string) (int, []string, error) {
 			errs = append(errs, fmt.Sprintf("entry %q: name must be lowercase letters, digits and hyphens", w.Name))
 		case w.Path == "" || w.Blurb == "":
 			errs = append(errs, fmt.Sprintf("entry %q: path and blurb are required", w.Name))
-		case w.Kind != "app" && w.Kind != "tool":
-			errs = append(errs, fmt.Sprintf("entry %q: kind must be app or tool, got %q", w.Name, w.Kind))
+		case !validKind(w.Kind):
+			errs = append(errs, fmt.Sprintf("entry %q: kind must be app, tool or lab, got %q", w.Name, w.Kind))
 		}
 		if fi, err := os.Stat(filepath.Join(root, w.Path)); w.Path != "" && (err != nil || !fi.IsDir()) {
 			errs = append(errs, fmt.Sprintf("%s is listed but does not exist", w.Path))
@@ -123,8 +125,8 @@ func add(root string, w Wire) (bool, error) {
 	if !nameRe.MatchString(w.Name) {
 		return false, fmt.Errorf("name %q must be lowercase letters, digits and hyphens", w.Name)
 	}
-	if w.Kind != "app" && w.Kind != "tool" {
-		return false, fmt.Errorf("kind must be app or tool, got %q", w.Kind)
+	if !validKind(w.Kind) {
+		return false, fmt.Errorf("kind must be app, tool or lab, got %q", w.Kind)
 	}
 	ix, err := load(root)
 	if err != nil {

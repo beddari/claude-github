@@ -10,6 +10,8 @@ with no other runtimes.
 |---|---|---|
 | [`apps/spillelista`](apps/spillelista) | static web app | Spotify playlist page |
 | [`tools/skill-audit`](tools/skill-audit) | Go CLI | Audits Claude skills against current best practice and writes the prompt to fix them |
+| [`labs/acme-env`](labs/acme-env) | podman lab | Split DNS and an internal ACME CA: CoreDNS, etcd and step-ca issuing per-name certs over HTTP-01 |
+| [`labs/talos-cluster`](labs/talos-cluster) | Talos lab | Talos Kubernetes in Docker that consumes acme-env through external-dns and cert-manager |
 
 ## Layout
 
@@ -19,16 +21,19 @@ assets/              shared static files for the landing page (background photo)
 wires.json           index of every experiment; `task ci` fails if one is missing
 apps/<name>/         web apps / sites, published as-is
 tools/<name>/        CLIs, one Go module each; an index.html makes it a published page with downloads
+labs/<name>/         runnable environments (containers, clusters); labs/lab.env holds shared settings
 infra/drawer/        repo plumbing (Go): checks wires.json, builds the site, local static server
 templates/<kind>/    scaffolds used by `task new:*`
 go.work              Go workspace listing every module
 Taskfile.yml         root tasks + includes for every project (`includes:` stays last)
+Brewfile             host tools for macOS and Linuxbrew (`task tools`)
 .github/workflows/   ci.yml runs `task ci`; pages.yml publishes the site from main
 ```
 
 ## Common tasks
 
 ```sh
+task tools                 # brew bundle: go, task, podman, talosctl, kubectl, helm, step, dig, jq
 task                       # list everything
 task ci                    # drawer index check + `ci` in every project (what GitHub Actions runs)
 task serve                 # the repo as-is at http://127.0.0.1:8000/
@@ -39,7 +44,9 @@ task new:go NAME=my-tool BLURB="what it does"
                            # and wires.json, then runs its ci
 ```
 
-Requirements: Go 1.24+ and Task 3.x (`go install github.com/go-task/task/v3/cmd/task@latest`).
+Requirements: [Homebrew](https://brew.sh) (macOS or Linux), then `brew bundle`
+(or `task tools`). Go and Task alone are enough for everything except the labs,
+which also need podman and a Docker Engine.
 
 ## Publishing
 
@@ -55,9 +62,9 @@ One-time setup: **Settings → Pages → Source: GitHub Actions**.
 
 ## Adding something that isn't a Go CLI
 
-1. Create `apps/<name>/` or `tools/<name>/` with a `Taskfile.yml` that has a `ci` task.
+1. Create `apps/<name>/`, `tools/<name>/` or `labs/<name>/` with a `Taskfile.yml` that has a `ci` task.
 2. Add it to `includes:` at the end of the root Taskfile.
-3. Put it in the drawer: `task wire:add NAME=<name> PATH=apps/<name> KIND=app BLURB="what it does"`.
+3. Put it in the drawer: `task wire:add NAME=<name> PATH=apps/<name> KIND=app|tool|lab BLURB="what it does"`.
    Apps get an `href` automatically. For a tool with its own page, add
    `"href": "tools/<name>/"` and an `index.html`.
 

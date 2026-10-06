@@ -14,6 +14,14 @@ tasks:
     cmds:
       - '{{.TASK_EXE}} --list'
 
+  tools:
+    desc: Install host tools from the Brewfile (macOS + Linuxbrew)
+    preconditions:
+      - sh: command -v brew
+        msg: "Homebrew not found — see https://brew.sh (works on Linux too)"
+    cmds:
+      - brew bundle --file Brewfile
+
   serve:
     desc: Serve the repo as-is (drawer + apps) at http://127.0.0.1:PORT/
     cmds:
@@ -31,7 +39,7 @@ tasks:
       - '{{.DRAWER}} serve -port {{.PORT}} _site'
 
   index:check:
-    desc: Check wires.json lists every project under apps/ and tools/ (the drawer's index)
+    desc: Check wires.json lists every project under apps/, tools/ and labs/ (the drawer's index)
     cmds:
       - '{{.DRAWER}} check'
 
@@ -43,12 +51,12 @@ tasks:
       - '{{.DRAWER}} add "{{.NAME}}" "{{.PATH}}" "{{.KIND}}" "{{.BLURB}}"'
 
   ci:
-    desc: Check the drawer index, then run `ci` in every project under infra/, apps/ and tools/
+    desc: Check the drawer index, then run `ci` in every project under infra/, apps/, tools/ and labs/
     cmds:
       - task: index:check
       - |
         set -e
-        for d in infra/*/ apps/*/ tools/*/; do
+        for d in infra/*/ apps/*/ tools/*/ labs/*/; do
           [ -f "$d/Taskfile.yml" ] || continue
           echo "==> $d"
           '{{.TASK_EXE}}' -d "$d" ci
@@ -100,3 +108,9 @@ includes:
   skill-audit:
     taskfile: tools/skill-audit/Taskfile.yml
     dir: tools/skill-audit
+  acme-env:
+    taskfile: labs/acme-env/Taskfile.yml
+    dir: labs/acme-env
+  talos-cluster:
+    taskfile: labs/talos-cluster/Taskfile.yml
+    dir: labs/talos-cluster

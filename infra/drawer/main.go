@@ -15,8 +15,8 @@ import (
 const usage = `drawer — keep the wire drawer in order
 
 Usage:
-  drawer [-root DIR] check                           every apps/* and tools/* project is in wires.json, and every entry is valid
-  drawer [-root DIR] add NAME PATH KIND [BLURB]      append a wire (KIND: app | tool)
+  drawer [-root DIR] check                           every apps/*, tools/* and labs/* project is in wires.json, and every entry is valid
+  drawer [-root DIR] add NAME PATH KIND [BLURB]      append a wire (KIND: app | tool | lab)
   drawer [-root DIR] site [OUT]                      build the Pages site into OUT (default _site)
   drawer serve [-port 8000] [DIR]                    serve DIR (default .) at http://127.0.0.1:PORT/
   drawer json FILE KEY.PATH                          print a JSON string value; fail if missing or empty

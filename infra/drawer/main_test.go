@@ -71,6 +71,15 @@ func TestCheckAndAdd(t *testing.T) {
 	}
 	runOK(t, "-root", r, "check")
 
+	// labs/* count as projects too.
+	os.MkdirAll(filepath.Join(r, "labs/a-lab"), 0o755)
+	os.WriteFile(filepath.Join(r, "labs/a-lab/Taskfile.yml"), []byte("version: '3'\n"), 0o644)
+	if code := run([]string{"-root", r, "check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "labs/a-lab is not in the drawer") {
+		t.Errorf("check with unlisted lab: %d %s", code, errb.String())
+	}
+	runOK(t, "-root", r, "add", "a-lab", "labs/a-lab", "lab", "Lab.")
+	runOK(t, "-root", r, "check")
+
 	if code := run([]string{"-root", r, "add", "Bad Name", "x", "tool"}, &out, &errb); code != 1 {
 		t.Errorf("bad name accepted")
 	}
