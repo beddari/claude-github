@@ -154,9 +154,17 @@ tasks:
           [ "$i" = 60 ] && { echo "dns: whoami.{{.ZONE}} resolved to '$ip', want {{.WORKER_IP}}" >&2; exit 1; }
           sleep 2
         done
-      - >-
-        curl -fsS --noproxy '*' --cacert {{.ROOT_CA}} --resolve whoami.{{.ZONE}}:443:{{.WORKER_IP}}
-        https://whoami.{{.ZONE}}/ | grep -E '^(Hostname|Host):'
+      # Traefik picks up the new TLS secret a few seconds after the Certificate turns Ready;
+      # until then it serves its default self-signed cert, so retry instead of failing at once.
+      - |
+        for i in $(seq 1 30); do
+          if out=$(curl -fsS --noproxy '*' --cacert {{.ROOT_CA}} --resolve whoami.{{.ZONE}}:443:{{.WORKER_IP}} \
+                https://whoami.{{.ZONE}}/ 2>&1); then
+            printf '%s\n' "$out" | grep -E '^(Hostname|Host):' && exit 0
+          fi
+          sleep 2
+        done
+        echo "https: whoami.{{.ZONE}} never served a certificate trusted by the lab root: $out" >&2; exit 1
       - >-
         echo | openssl s_client -connect {{.WORKER_IP}}:443 -servername whoami.{{.ZONE}} 2>/dev/null
         | openssl x509 -noout -issuer -enddate -ext subjectAltName
