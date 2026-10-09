@@ -92,3 +92,6 @@ includes:
   talos-cluster:
     taskfile: labs/talos-cluster/Taskfile.yml
     dir: labs/talos-cluster
+  roblox-gdd:
+    taskfile: labs/roblox-gdd/Taskfile.yml
+    dir: labs/roblox-gdd

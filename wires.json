@@ -28,6 +28,13 @@
       "kind": "lab",
       "blurb": "Talos Kubernetes in Docker that consumes acme-env: external-dns publishes into its DNS, cert-manager gets certificates and a wildcard from its CA, and its root signs the cluster's own CA.",
       "href": "labs/talos-cluster/"
+    },
+    {
+      "name": "roblox-gdd",
+      "path": "labs/roblox-gdd",
+      "kind": "lab",
+      "blurb": "A Roblox game template for Claude Desktop: Rojo, an Obsidian design vault with PageTree, the Studio and Obsidian MCP servers, four skills and four prompts.",
+      "href": "labs/roblox-gdd/"
     }
   ]
 }

@@ -12,6 +12,7 @@ landing page with one wire per experiment, published on GitHub Pages.
 | [skill-audit](tools/skill-audit) | tool | Checks Claude skills against current guidance and writes the prompt to fix them |
 | [acme-env](labs/acme-env) | lab | Split DNS and an internal ACME CA in podman: CoreDNS, etcd, step-ca and BIND for wildcards |
 | [talos-cluster](labs/talos-cluster) | lab | Talos Kubernetes in Docker that gets DNS records, certificates, a wildcard and its own CA from acme-env |
+| [roblox-gdd](labs/roblox-gdd) | lab | A Roblox game template for Claude Desktop: Rojo, an Obsidian design vault, the Studio and Obsidian MCP servers, skills and prompts |
 
 On GitHub Pages, from every push to `main`:
 
@@ -36,12 +37,13 @@ task site-serve    # the site as GitHub Pages will have it, at http://127.0.0.1:
 `task ci` ends with each project's result:
 
 ```
-wires.json OK (4 wires)
-docs OK (14 markdown files, all relative links resolve)
+wires.json OK (5 wires)
+docs OK (29 markdown files, all relative links resolve)
 >>> infra/drawer/
 >>> apps/spillelista/
 >>> tools/skill-audit/
 >>> labs/acme-env/
+>>> labs/roblox-gdd/
 >>> labs/talos-cluster/
 >>> All good: every project's ci passed.
 ```

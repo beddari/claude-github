@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Copies the template into a new folder, dotfiles included, and makes the
+# first commit there.
+#
+# Usage: bin/new DIR
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+dest="$1"
+
+[[ -n "$dest" ]] || fail "Usage: task roblox-gdd:new -- DIR"
+if [[ -e "$dest" && -n "$(ls -A "$dest")" ]]; then
+	fail "$dest exists and is not empty!"
+fi
+
+mkdir -p "$dest" || fail "Could not create $dest!"
+cp -R "$template/." "$dest/" || fail "Copying the template to $dest failed!"
+git -C "$dest" init -q || fail "git init in $dest failed!"
+git -C "$dest" add -A || fail "git add in $dest failed!"
+git -C "$dest" commit -q -m "Start from the roblox-gdd template" ||
+	fail "The first commit in $dest failed!"
+log "Made $dest. Open it in a Code-tab session and run prompts/1-setup.md; it skips the copy."

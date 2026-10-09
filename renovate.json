@@ -46,6 +46,14 @@
         "image: (?<depName>[^:\\s]+):(?<currentValue>[^\\s]+)"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "The roblox-gdd template's toolchain, pinned in its rokit.toml",
+      "managerFilePatterns": ["/^labs/roblox-gdd/template/rokit\\.toml$/"],
+      "matchStrings": ["= \"(?<depName>[^@\"]+)@(?<currentValue>[^\"]+)\""],
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v?(?<version>.+)$"
     }
   ]
 }

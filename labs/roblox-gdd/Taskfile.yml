@@ -1,0 +1,40 @@
+# roblox-gdd: a Roblox game template for Claude, with Rojo, an Obsidian design
+# vault and two MCP servers. Each task calls a script in bin/; see README.md.
+version: "3"
+
+tasks:
+  # Plain "task" lists the tasks.
+  default:
+    silent: true
+    cmds:
+      - task --list
+
+  new:
+    desc: 'Copy the template into a new folder, relative to where you run task: task roblox-gdd:new -- DIR'
+    dir: '{{.USER_WORKING_DIR}}'
+    silent: true
+    cmds:
+      - '"{{.TASKFILE_DIR}}/bin/new" {{.CLI_ARGS}}'
+
+  tools:
+    desc: Download rojo, luau-lsp and StyLua at the pinned versions, and the Roblox types, into .run/
+    silent: true
+    cmds:
+      - bin/tools
+
+  check:
+    desc: Check the template's JSON, check-gdd.sh, the skills, and its Luau with rojo, luau-lsp and StyLua
+    silent: true
+    cmds:
+      - bin/check
+
+  ci:
+    desc: What CI runs, the same as check
+    silent: true
+    cmds:
+      - bin/check
+
+  clean:
+    desc: Remove .run/, the downloaded tools and the checked copy
+    cmds:
+      - rm -rf .run
