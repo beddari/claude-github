@@ -39,7 +39,7 @@ flowchart LR
 |---|---|---|
 | `apps/` | Static web apps, published as they are | spillelista |
 | `tools/` | Go command-line tools; their page has downloads | skill-audit |
-| `labs/` | Environments that run containers or clusters | acme-env, talos-cluster |
+| `labs/` | Environments to run things in: containers, clusters, or a game project for Claude | acme-env, talos-cluster, roblox-gdd |
 | `infra/` | The repository's own plumbing; not in the drawer | drawer |
 | `templates/` | What `task new-go` copies | go-cli |
 

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>roblox-gdd</title>
+  <meta name="description" content="A Roblox game template for Claude Desktop: Rojo, an Obsidian design vault with PageTree, the Studio and Obsidian MCP servers, four skills and four prompts." />
+  <link rel="stylesheet" href="../../assets/wire.css" />
+</head>
+<body>
+  <main>
+    <a class="back" href="../../">← Back to the drawer</a>
+    <span class="wire" aria-hidden="true"></span>
+    <h1>roblox-gdd</h1>
+    <p class="lede">
+      A starting point for making a Roblox game with Claude, in the Code tab
+      of Claude Desktop. The code is Luau that Rojo syncs into Studio. The
+      design is an Obsidian vault shown as a page tree. Claude reaches Studio
+      and Obsidian through their MCP servers. Four skills keep the design and
+      the code in agreement, and four prompts take you from an empty folder
+      to the first system.
+    </p>
+
+    <h2>Why</h2>
+    <p>
+      A game design document drifts from the code within weeks. Claude can
+      keep the two together, but only if it knows where each lives, how each
+      may change, and how to check that they agree. Rojo overwrites edits made
+      in Studio. PageTree keeps a page's children in a folder next to it, so a
+      rename must move both. A remote has to match in the code, the network
+      page and the canvas. The kit writes these rules down once, as skills,
+      and adds a script that finds drift.
+    </p>
+
+    <h2>What you get</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>part</th><th>what it holds</th></tr></thead>
+        <tbody>
+          <tr><td>template/</td><td>A Rojo project with one server and one client entry script, a typed remote, and a four-page design vault that matches it</td></tr>
+          <tr><td>CLAUDE.md</td><td>This game, its tools, which skill to use when, and the rules. No how-to</td></tr>
+          <tr><td>gdd-code-sync</td><td>The order of work for a change, and <code>check-gdd.sh</code>, which finds drift between design and code</td></tr>
+          <tr><td>rojo-luau</td><td>File-to-instance rules, strict Luau, remotes and server checks, and the type check, lint and format commands</td></tr>
+          <tr><td>obsidian-pagetree-vault</td><td>PageTree's layout, the Semantic Notes Vault MCP tools, renames and moves, page templates and JSON Canvas</td></tr>
+          <tr><td>roblox-studio-mcp</td><td>Studio's MCP tools, how to use them alongside Rojo, and the playtest loop</td></tr>
+          <tr><td>prompts/</td><td>Set up, check the connections, design kickoff, build a system</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>What it finds</h2>
+    <p>
+      <code>check-gdd.sh</code> on a copy of the template with six planted
+      problems. CI plants these and more, with Windows line endings, on
+      every run:
+    </p>
+<pre><span class="d">$ bash .claude/skills/gdd-code-sync/scripts/check-gdd.sh</span>
+<span class="f">!!!</span> Remote BuyItem is in Remotes.luau but has no '### BuyItem' in Networking.md
+<span class="f">!!!</span> design/Game/Systems/Combat System/ holds pages but design/Game/Systems/Combat System.md is missing
+<span class="f">!!!</span> design/Other/ holds pages but design/Other.md is missing
+<span class="f">!!!</span> More than one page is named 'damage'; [[damage]] is ambiguous
+<span class="f">!!!</span> design/Game/Systems/X.md lists code: src/server/Services/Nope.luau, which does not exist
+<span class="f">!!!</span> design/Game/Systems/X.md lists remote Ghost, which Remotes.luau does not declare
+<span class="f">!!!</span> 6 problem(s) between design/ and src/!</pre>
+    <p>
+      Haiku, Sonnet and Opus each added the same Coins system to a copy of
+      the template by following the skills. All three passed this check,
+      the luau-lsp type check, StyLua and a Rojo build.
+    </p>
+
+    <h2>Plug it in</h2>
+    <p>
+      You need Claude Desktop, Git, Roblox Studio, Obsidian 1.13 or later
+      with the PageTree and Semantic Notes Vault MCP plugins, and Rokit. In
+      the Code tab, start a <b>Local</b> session on an empty folder and paste
+      the first prompt:
+    </p>
+<pre><span class="d"># prompts/1-setup.md, in a Code-tab session on an empty folder</span>
+Set up a new Roblox game project in this folder from the roblox-gdd kit.
+<span class="d">…</span></pre>
+    <p class="note">
+      The README has the hand steps between the prompts: opening the vault,
+      the plugin settings, the API key, and Studio's Quick connect.
+    </p>
+
+    <h2>Use it</h2>
+<pre><span class="d"># once the connections pass: interview, then the first pages</span>
+prompts/3-design-kickoff.md
+
+<span class="d"># once per system: page, code, network contract, checks, playtest</span>
+prompts/4-first-feature.md
+
+<span class="d"># any time, in the project: do design/ and src/ agree?</span>
+bash .claude/skills/gdd-code-sync/scripts/check-gdd.sh</pre>
+
+    <p>
+      <a href="https://github.com/beddari/claude-github/tree/main/labs/roblox-gdd">Source and README on GitHub →</a>
+    </p>
+  </main>
+</body>
+</html>

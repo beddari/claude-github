@@ -15,6 +15,7 @@ function needs_labs()
 {
 	case "$1" in
 		labs/docs/*|labs/*.md|labs/*.html)	return 1 ;;
+		labs/roblox-gdd/*)		return 1 ;;
 		labs/*)				return 0 ;;
 		.github/workflows/labs.yml)	return 0 ;;
 		bin/labs-changed)		return 0 ;;

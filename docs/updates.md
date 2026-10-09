@@ -36,8 +36,9 @@ Two workflows run on every pull request:
 Merge when both are green. `labs` runs its job `e2e` when the change touches
 anything under `labs/` but the docs and pages, its workflow, or
 `bin/labs-changed`, which decides it. A change to the labs' READMEs, their
-`index.html` pages or `labs/docs/` skips `e2e`, and GitHub counts a
-skipped job as passed. To see what a branch would do:
+`index.html` pages or `labs/docs/` skips `e2e`, and so does a change to
+`labs/roblox-gdd/`, which has no containers and no part in that run. GitHub
+counts a skipped job as passed. To see what a branch would do:
 
 ```sh
 task labs-changed               # true or false, against origin/main

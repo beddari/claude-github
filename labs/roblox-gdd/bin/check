@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#
+# Checks the kit: the template's JSON, the skills, check-gdd.sh, and the
+# template's Luau with rojo, luau-lsp and StyLua at the pinned versions.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+skills="$template/.claude/skills"
+check_gdd="$skills/gdd-code-sync/scripts/check-gdd.sh"
+build_dir="$run_dir/project"
+
+#
+# Checks that every JSON file of the template parses, and that every canvas
+# edge joins two nodes that exist.
+#
+function check_json()
+{
+	local file
+
+	for file in default.project.json .luaurc .mcp.json \
+	            design/Game/Networking.canvas; do
+		jq -e . "$template/$file" >/dev/null || return $?
+	done
+	jq -e '[.edges[] | .fromNode, .toNode] - [.nodes[].id] | length == 0' \
+		"$template/design/Game/Networking.canvas" >/dev/null || return $?
+	log "JSON OK: 4 files, every canvas edge joins two nodes."
+}
+
+#
+# Plants known problems in a copy of the template, with CRLF line endings,
+# and checks that check-gdd.sh reports each of them and nothing else.
+#
+function check_gdd_fixture()
+{
+	local fixture="$run_dir/fixture"
+	local output expected file
+	local cr=$'\r'
+
+	mkdir -p "$run_dir" || return $?
+	rm -rf "$fixture" && cp -R "$template" "$fixture" || return $?
+
+	# A one-line table, two names on a line, a remote in a comment.
+	cat > "$fixture/src/shared/Remotes.luau" <<'LUAU' || return $?
+local REMOTE_EVENTS: { string } = {
+	"ClientReady", "ExtraEvent", -- "Ghost"
+}
+local REMOTE_FUNCTIONS: { string } = { "GetCoins", "BuyItem" }
+LUAU
+	printf '\n### GetCoins\n- **Kind:** RemoteFunction\n' \
+		>> "$fixture/design/Game/Networking.md" || return 1
+
+	# A folder of pages without its page, and two names differing in case.
+	mkdir -p "$fixture/design/Game/Systems/Combat System" || return $?
+	cat > "$fixture/design/Game/Systems/Combat System/Damage.md" <<'PAGE' ||
+---
+status: draft
+code: [src/nope.luau, src/shared/Remotes.luau]
+remotes:
+  - ClientReady
+  - Ghost
+---
+# Damage
+PAGE
+		return $?
+	echo "# damage" > "$fixture/design/Game/damage.md" || return 1
+
+	# Windows line endings on every page and on Remotes.luau.
+	while IFS= read -r file; do
+		sed "s/\$/$cr/" "$file" > "$file.crlf" && mv "$file.crlf" "$file" ||
+			return $?
+	done < <(find "$fixture/design" "$fixture/src/shared" -type f \
+		\( -name '*.md' -o -name '*.luau' \))
+
+	output="$(bash "$check_gdd" "$fixture" 2>&1)" && return 1
+	for expected in \
+		"Remote BuyItem is in Remotes.luau but has no '### BuyItem'" \
+		"Remote ExtraEvent is in Remotes.luau but has no '### ExtraEvent'" \
+		"design/Game/Systems/Combat System/ holds pages but design/Game/Systems/Combat System.md is missing" \
+		"More than one page is named 'damage'" \
+		"lists code: src/nope.luau, which does not exist" \
+		"lists remote Ghost, which Remotes.luau does not declare" \
+		"6 problem(s) between design/ and src/!"; do
+		if ! grep -qF "$expected" <<< "$output"; then
+			error "check-gdd.sh did not report: $expected"
+			echo "$output" >&2
+			return 1
+		fi
+	done
+	log "check-gdd.sh OK: the template passes, a fixture's 6 planted problems are found."
+}
+
+#
+# Runs skill-audit on the skills and fails when any check of any skill fails.
+# Warnings pass: labs/roblox-gdd/docs/troubleshooting.md lists the known one.
+#
+function check_skills()
+{
+	local report failed
+
+	report="$(cd "$repo" && go run ./tools/skill-audit -format json "$skills")" ||
+		return $?
+	failed="$(jq -r '[.[] | .name as $n | .results[]
+	                  | select(.status == "fail") | "\($n): \(.id)"]
+	                 | join(", ")' <<< "$report")" || return $?
+	if [[ -n "$failed" ]]; then
+		error "skill-audit: $failed"
+		return 1
+	fi
+	log "skill-audit OK: $(jq length <<< "$report") skills, no failures."
+}
+
+#
+# Runs the template's Luau checks in a fresh copy under .run/project/.
+#
+function check_luau()
+{
+	mkdir -p "$run_dir" || return $?
+	rm -rf "$build_dir" && cp -R "$template" "$build_dir" || return $?
+	(
+		cd "$build_dir" || exit $?
+		rojo sourcemap default.project.json -o sourcemap.json || exit $?
+		luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json \
+			--definitions=@roblox="$defs_file" \
+			--base-luaurc=.luaurc src 2>&1 |
+			grep -v '^\[\(INFO\|WARN\)\]'
+		(( PIPESTATUS[0] == 0 )) || exit 1
+		stylua --check src || exit $?
+		mkdir -p build && rojo build -o build/Game.rbxl || exit $?
+	) || return $?
+	log "Luau OK: rojo sourcemap and build, luau-lsp analyze, stylua --check."
+}
+
+command -v jq         >/dev/null || fail "jq is missing: task tools, at the root"
+command -v shellcheck >/dev/null || fail "shellcheck is missing: task tools, at the root"
+command -v go         >/dev/null || fail "go is missing: task tools, at the root"
+
+check_json || fail "A JSON file of the template is wrong!"
+
+shellcheck -s bash -e SC2034,SC2154,SC1090,SC1091,SC2242 "$check_gdd" ||
+	fail "shellcheck found problems in check-gdd.sh!"
+
+bash "$check_gdd" "$template" || fail "check-gdd.sh fails on the template!"
+check_gdd_fixture || fail "check-gdd.sh missed a planted problem!"
+
+check_skills || fail "skill-audit fails a skill: task skill-audit:audit -- $skills"
+
+"${0%/*}/tools" || fail "Could not get the tools!"
+PATH="$tools_dir:$PATH"
+check_luau || fail "The template's Luau checks failed!"

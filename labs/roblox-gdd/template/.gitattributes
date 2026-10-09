@@ -1,0 +1,2 @@
+# Every text file in LF, also on Windows: check-gdd.sh and StyLua need it.
+* text=auto eol=lf

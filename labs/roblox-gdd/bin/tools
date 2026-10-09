@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# Downloads rojo, luau-lsp and StyLua at the versions template/rokit.toml
+# pins, and the Roblox type definitions of that luau-lsp, into .run/. Keeps what is already
+# there. selene is left out: its Roblox standard library needs Roblox's API
+# servers, labs/roblox-gdd/docs/troubleshooting.md.
+#
+
+source "${0%/*}/functions.sh" || exit $?
+
+#
+# Downloads one tool into .run/bin/<tool>-<version>/ and links .run/bin/<tool>.
+#
+function fetch_tool()
+{
+	local tool="$1"
+	local spec repo version tag asset dir
+
+	spec="$(pinned "$tool")"
+	[[ -n "$spec" ]] || return 1
+	repo="${spec% *}"
+	version="${spec#* }"
+	asset="$(asset_name "$tool" "$version")" || return $?
+	dir="$tools_dir/$tool-$version"
+
+	if [[ ! -x "$dir/$tool" ]]; then
+		case "$tool" in
+			luau-lsp)	tag="$version" ;;
+			*)		tag="v$version" ;;
+		esac
+		log "Downloading $tool $version ..."
+		mkdir -p "$dir" || return $?
+		curl -sSfL -o "$dir/$asset" \
+			"https://github.com/$repo/releases/download/$tag/$asset" ||
+			return $?
+		unzip -o -q "$dir/$asset" -d "$dir" || return $?
+		rm -f "$dir/$asset"
+		chmod +x "$dir/$tool" || return $?
+	fi
+	ln -sf "$tool-$version/$tool" "$tools_dir/$tool" || return $?
+}
+
+command -v curl  >/dev/null || fail "curl is missing!"
+command -v unzip >/dev/null || fail "unzip is missing!"
+
+for tool in rojo luau-lsp stylua; do
+	fetch_tool "$tool" || fail "Download of $tool failed!"
+done
+
+lsp_version="$(pinned luau-lsp)"
+lsp_version="${lsp_version#* }"
+defs_url="https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/$lsp_version/scripts/globalTypes.d.luau"
+if [[ ! -s "$defs_file.$lsp_version" ]]; then
+	log "Downloading the Roblox type definitions of luau-lsp $lsp_version ..."
+	curl -sSfL -o "$defs_file.$lsp_version" "$defs_url" ||
+		fail "Download of $defs_url failed!"
+fi
+cp "$defs_file.$lsp_version" "$defs_file" || fail "Copying the definitions failed!"
+log "Tools in ${tools_dir#"$repo"/}: rojo, luau-lsp, stylua."

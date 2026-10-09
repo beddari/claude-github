@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    {"id": "client", "type": "group", "label": "Client", "x": -480, "y": -160, "width": 400, "height": 280},
+    {"id": "server", "type": "group", "label": "Server", "x": 80, "y": -160, "width": 400, "height": 280},
+    {"id": "ready-controller", "type": "text", "text": "**ReadyController**\nsrc/client/Controllers/ReadyController.luau", "x": -440, "y": -80, "width": 320, "height": 120},
+    {"id": "ready-service", "type": "text", "text": "**ReadyService**\nsrc/server/Services/ReadyService.luau", "x": 120, "y": -80, "width": 320, "height": 120}
+  ],
+  "edges": [
+    {"id": "client-ready", "fromNode": "ready-controller", "fromSide": "right", "toNode": "ready-service", "toSide": "left", "toEnd": "arrow", "label": "ClientReady (C→S)"}
+  ]
+}
